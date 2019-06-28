@@ -30,6 +30,10 @@
 extern "C" {
 #endif
 
+#if defined(J9VM_ENV_DATA64)
+#define MULTI_LAYER_CACHE
+#endif /* defined(J9VM_ENV_DATA64) */
+
 /* 
  * re: Out-of-process support
  * The macros in this header have not all been converted to support out-of-process yet.
@@ -37,7 +41,6 @@ extern "C" {
  * Use the J9SHR_READMEM() helper below.
  */
 #define J9SHR_READMEM(x_) (x_)
-#define J9SHR_READSRP(x_) (x_)
 
 /**
  * CACHE ENTRIES
@@ -70,8 +73,9 @@ extern "C" {
 #define TYPE_INVALIDATED_COMPILED_METHOD 9
 #define TYPE_CACHELET 10
 #define TYPE_ATTACHED_DATA 11
+#define TYPE_PREREQ_CACHE 12
 /* This macro should have same value as the last valid macro defining a type of cache data */
-#define MAX_DATA_TYPES 11
+#define MAX_DATA_TYPES 12
 
 typedef struct ShcItemHdr {
 	U_32 itemLen; 		/* lower bit set means item is stale */
@@ -131,70 +135,65 @@ typedef struct ClasspathWrapper {
 #define CPWDATA(cpw) ((U_8*)(cpw) + sizeof(ClasspathWrapper))
 #define CPWLEN(cpw) (sizeof(ClasspathWrapper) + J9SHR_READMEM((cpw)->ClasspathItemSize))
 
+typedef struct J9ShrOffSet {
+#if defined(MULTI_LAYER_CACHE)
+	U_32 cacheLayer;
+#endif /* defined(MULTI_LAYER_CACHE) */
+	U_32 offset;
+} J9ShrOffSet;
+
 typedef struct ROMClassWrapper {
-	J9SRP theCpOffset;
+	J9ShrOffSet theCpOffset;
 	I_16 cpeIndex;
-	J9SRP romClassOffset;	/* ROMClass stored in different part of cache */
+	J9ShrOffSet romClassOffset;	/* ROMClass stored in different part of cache */
 	I_64 timestamp;
 } ROMClassWrapper;
 
 typedef struct ScopedROMClassWrapper {
-	J9SRP theCpOffset;
+	J9ShrOffSet theCpOffset;
 	I_16 cpeIndex;
-	J9SRP romClassOffset;	/* ROMClass stored in different part of cache */
+	J9ShrOffSet romClassOffset;	/* ROMClass stored in different part of cache */
 	I_64 timestamp;
-	J9SRP modContextOffset;
-	J9SRP partitionOffset;
+	J9ShrOffSet modContextOffset;
+	J9ShrOffSet partitionOffset;
 } ScopedROMClassWrapper;
 
-#define RCWROMCLASS(rcw) (((U_8*)(rcw)) + J9SHR_READSRP((rcw)->romClassOffset))
-#define RCWCLASSPATH(rcw) (((U_8*)(rcw)) + J9SHR_READSRP((rcw)->theCpOffset))
-
-/* These macros are only valid for a ScopedROMClassWrapper */
-#define RCWMODCONTEXT(srcw) (J9SHR_READSRP(srcw->modContextOffset) ? (((U_8*)(srcw)) + J9SHR_READSRP((srcw)->modContextOffset)) : 0)
-#define RCWPARTITION(srcw) (J9SHR_READSRP(srcw->partitionOffset) ? (((U_8*)(srcw)) + J9SHR_READSRP((srcw)->partitionOffset)) : 0)
-
 typedef struct OrphanWrapper {
-	J9SRP romClassOffset;
+	J9ShrOffSet romClassOffset;
 } OrphanWrapper;
 
-#define OWROMCLASS(ow) (((U_8*)(ow)) + J9SHR_READSRP((ow)->romClassOffset))
-
 typedef struct CompiledMethodWrapper {
-	J9SRP romMethodOffset;
+	J9ShrOffSet romMethodOffset;
 	U_32 dataLength;
 	U_32 codeLength;
 } CompiledMethodWrapper;
 
-#define CMWROMMETHOD(cmw) (((U_8*)(cmw)) + J9SHR_READSRP((cmw)->romMethodOffset))
 #define CMWDATA(cmw) (((U_8*)(cmw)) + sizeof(CompiledMethodWrapper))
 #define CMWCODE(cmw) (((U_8*)(cmw)) + sizeof(CompiledMethodWrapper) + J9SHR_READMEM((cmw)->dataLength))
 #define CMWITEM(cmw) (((U_8*)(cmw)) - sizeof(ShcItem))
 
 typedef struct CharArrayWrapper {
-	J9SRP romStringOffset;
+	J9ShrOffSet romStringOffset;
 	U_32 objectSize;
 } CharArrayWrapper;
 
-#define CAWROMSTRING(caw) (((U_8*)(caw)) + J9SHR_READSRP((caw)->romStringOffset))
+#define CAWROMSTRING(caw) (((U_8*)(caw)) + J9SHR_READMEM((caw)->romStringOffset))
 #define CAWDATA(caw) (((U_8*)(caw)) + sizeof(CharArrayWrapper))
 #define CAWITEM(caw) (((U_8*)(caw)) - sizeof(ShcItem))
 
 typedef struct ByteDataWrapper {
 	U_32 dataLength;
-	J9SRP tokenOffset;
-	J9SRP externalBlockOffset;
+	J9ShrOffSet tokenOffset;
+	J9ShrOffSet externalBlockOffset;
 	U_8 dataType;
 	U_8 inPrivateUse;
 	U_16 privateOwnerID;	
 } ByteDataWrapper;
 
-#define BDWTOKEN(bdw) (J9SHR_READSRP((bdw)->tokenOffset) ? (((U_8*)(bdw)) + J9SHR_READSRP((bdw)->tokenOffset)) : NULL)
-#define BDWDATA(bdw) (J9SHR_READSRP((bdw)->externalBlockOffset) ? (((U_8*)(bdw)) + J9SHR_READSRP((bdw)->externalBlockOffset)) : (((U_8*)(bdw)) + sizeof(ByteDataWrapper)))
+#define BDWDATA(bdw) (((U_8*)(bdw)) + sizeof(ByteDataWrapper))
 #define BDWITEM(bdw) (((U_8*)(bdw)) - sizeof(ShcItem))
 #define BDWLEN(bdw) J9SHR_READMEM((bdw)->dataLength)
 #define BDWTYPE(bdw)  J9SHR_READMEM((bdw)->dataType)
-#define BDWEXTBLOCK(bdw) J9SHR_READMEM((bdw)->externalBlockOffset)
 #define BDWINPRIVATEUSE(bdw) J9SHR_READMEM((bdw)->inPrivateUse)
 #define BDWPRIVATEOWNERID(bdw) J9SHR_READMEM((bdw)->privateOwnerID)
 
@@ -214,17 +213,16 @@ typedef struct CacheletWrapper {
 } CacheletWrapper;
 
 #define CLETHINTS(clet) (((U_8*)(clet)) + sizeof(CacheletWrapper))
-#define CLETDATA(clet) (((U_8*)(clet)) + J9SHR_READSRP((clet)->dataStart))
+#define CLETDATA(clet) (((U_8*)(clet)) + J9SHR_READMEM((clet)->dataStart))
 
 typedef struct AttachedDataWrapper {
-	J9SRP cacheOffset;
+	J9ShrOffSet cacheOffset;
 	U_32 dataLength;
 	U_16 type;
 	U_16 updateCount;
 	I_32 corrupt;
 } AttachedDataWrapper;
 
-#define ADWCACHEOFFSET(adw) (((U_8*)(adw)) + J9SHR_READSRP((adw)->cacheOffset))
 #define ADWLEN(adw) J9SHR_READMEM((adw)->dataLength)
 #define ADWTYPE(adw) J9SHR_READMEM((adw)->type)
 #define ADWCORRUPT(adw) J9SHR_READMEM((adw)->corrupt)

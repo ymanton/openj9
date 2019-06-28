@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2018 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -24,6 +24,7 @@ package com.ibm.j9ddr.vm29.pointer.helper;
 import com.ibm.j9ddr.CorruptDataException;
 import com.ibm.j9ddr.vm29.pointer.AbstractPointer;
 import com.ibm.j9ddr.vm29.pointer.U8Pointer;
+import com.ibm.j9ddr.vm29.pointer.generated.J9ShrOffSetPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.ByteDataWrapperPointer;
 import com.ibm.j9ddr.vm29.structure.ByteDataWrapper;
 import com.ibm.j9ddr.vm29.types.I32;
@@ -36,9 +37,16 @@ public class ByteDataWrapperHelper {
 
 	
 //	#define BDWEXTBLOCK(bdw) J9SHR_READMEM((bdw)->externalBlockOffset)
-	public static I32 BDWEXTBLOCK(ByteDataWrapperPointer ptr) throws CorruptDataException {
-		return new I32(ptr.externalBlockOffset());
-	}	
+	public static I32 BDWEXTBLOCK(ByteDataWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			return new I32(ptr.externalBlockOffset());
+		} else {
+			if (J9ShrOffSetPointer.cast(ptr.externalBlockOffsetEA()).offset().eq(0)) {
+				return new I32(0);
+			}
+			return new I32(J9ShrOffSetPointer.cast(ptr.externalBlockOffsetEA()).offset());
+		}
+	}
 
 //	#define BDWLEN(bdw) J9SHR_READMEM((bdw)->dataLength)	
 	public static U32 BDWLEN(ByteDataWrapperPointer ptr) throws CorruptDataException {
@@ -50,12 +58,21 @@ public class ByteDataWrapperHelper {
 		return ptr.dataType();
 	}
 
-	// #define BDWDATA(bdw) (J9SHR_READSRP((bdw)->externalBlockOffset) ? (((U_8*)(bdw)) + J9SHR_READSRP((bdw)->externalBlockOffset)) : (((U_8*)(bdw)) + sizeof(ByteDataWrapper)))	
-	public static U8Pointer BDWDATA(ByteDataWrapperPointer ptr) throws CorruptDataException {
-		if(!ptr.externalBlockOffset().eq(0)) {
-			return U8Pointer.cast(ptr).add(ptr.externalBlockOffset()); 
+	public static U8Pointer getDataFromByteDataWrapper(ByteDataWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			if(!ptr.externalBlockOffset().eq(0)) {
+				return U8Pointer.cast(ptr).add(ptr.externalBlockOffset()); 
+			} else {
+				return U8Pointer.cast(ptr).add(ByteDataWrapper.SIZEOF);
+			}
 		} else {
-			return U8Pointer.cast(ptr).add(ByteDataWrapper.SIZEOF);
+			if (J9ShrOffSetPointer.cast(ptr.externalBlockOffsetEA()).offset().eq(0)) {
+				/* return the same as #define BDWDATA(bdw) (((U_8*)(bdw)) + sizeof(ByteDataWrapper)) */
+				return U8Pointer.cast(ptr).add(ByteDataWrapper.SIZEOF);
+			} else {
+				/* return the same as SH_CacheMap::getDataFromByteDataWrapper(const ByteDataWrapper* bdw) */
+				return cacheHeader[0].add(J9ShrOffSetPointer.cast(ptr.externalBlockOffsetEA()).offset());
+			}
 		}
 	}
 //	#define BDWINPRIVATEUSE(bdw) J9SHR_READMEM((bdw)->inPrivateUse)
@@ -66,12 +83,19 @@ public class ByteDataWrapperHelper {
 	public static U16 BDWPRIVATEOWNERID(ByteDataWrapperPointer ptr) throws CorruptDataException { 
 		return ptr.privateOwnerID();
 	}
-//	#define BDWTOKEN(bdw) (J9SHR_READSRP((bdw)->tokenOffset) ?  : NULL)
-	public static AbstractPointer BDWTOKEN(ByteDataWrapperPointer ptr) throws CorruptDataException {
-		if(!ptr.tokenOffset().eq(0)) {
-			return U8Pointer.cast(ptr).add(ptr.tokenOffset());
+
+	public static AbstractPointer BDWTOKEN(ByteDataWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			if(!ptr.tokenOffset().eq(0)) {
+				return U8Pointer.cast(ptr).add(ptr.tokenOffset());
+			} else {
+				return U8Pointer.NULL;
+			}
 		} else {
-			return U8Pointer.NULL;
+			if (J9ShrOffSetPointer.cast(ptr.tokenOffsetEA()).offset().eq(0)) {
+				return U8Pointer.NULL;
+			}
+			return cacheHeader[0].add(J9ShrOffSetPointer.cast(ptr.tokenOffsetEA()).offset());
 		}
 	}
 }

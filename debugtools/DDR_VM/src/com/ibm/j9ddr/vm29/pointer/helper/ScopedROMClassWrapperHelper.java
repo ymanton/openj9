@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -23,24 +23,38 @@ package com.ibm.j9ddr.vm29.pointer.helper;
 
 import com.ibm.j9ddr.CorruptDataException;
 import com.ibm.j9ddr.vm29.pointer.U8Pointer;
+import com.ibm.j9ddr.vm29.pointer.generated.J9ShrOffSetPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.ScopedROMClassWrapperPointer;
 
 public class ScopedROMClassWrapperHelper {
 //	#define RCWMODCONTEXT(srcw) (J9SHR_READSRP(srcw->modContextOffset) ? (((U_8*)(srcw)) + J9SHR_READSRP((srcw)->modContextOffset)) : 0)
-	public static U8Pointer RCWMODCONTEXT(ScopedROMClassWrapperPointer ptr) throws CorruptDataException {
-		if(!ptr.modContextOffset().eq(0)) {
-			return U8Pointer.cast(ptr).add(ptr.modContextOffset());
+	public static U8Pointer RCWMODCONTEXT(ScopedROMClassWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			if(!ptr.modContextOffset().eq(0)) {
+				return U8Pointer.cast(ptr).add(ptr.modContextOffset());
+			} else {
+				return U8Pointer.NULL;
+			}
 		} else {
-			return U8Pointer.NULL;
+			if (J9ShrOffSetPointer.cast(ptr.modContextOffsetEA()).offset().eq(0)) {
+				return U8Pointer.NULL;
+			}
+			return cacheHeader[0].add(J9ShrOffSetPointer.cast(ptr.modContextOffsetEA()).offset());
 		}
 	}
-	
-//	#define RCWPARTITION(srcw) (J9SHR_READSRP(srcw->partitionOffset) ? (((U_8*)(srcw)) + J9SHR_READSRP((srcw)->partitionOffset)) : 0)	
-	public static U8Pointer RCWPARTITION(ScopedROMClassWrapperPointer ptr) throws CorruptDataException {
-		if(!ptr.partitionOffset().eq(0)) {
-			return U8Pointer.cast(ptr).add(ptr.partitionOffset());
+
+	public static U8Pointer RCWPARTITION(ScopedROMClassWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			if(!ptr.partitionOffset().eq(0)) {
+				return U8Pointer.cast(ptr).add(ptr.partitionOffset());
+			} else {
+				return U8Pointer.NULL;
+			}
 		} else {
-			return U8Pointer.NULL;
+			if (J9ShrOffSetPointer.cast(ptr.partitionOffsetEA()).offset().eq(0)) {
+				return U8Pointer.NULL;
+			}
+			return cacheHeader[0].add(J9ShrOffSetPointer.cast(ptr.partitionOffsetEA()).offset());
 		}
 	}
 }

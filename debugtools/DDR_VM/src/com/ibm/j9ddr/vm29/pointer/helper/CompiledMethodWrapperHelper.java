@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 1991, 2014 IBM Corp. and others
+ * Copyright (c) 1991, 2019 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -23,15 +23,22 @@ package com.ibm.j9ddr.vm29.pointer.helper;
 
 import com.ibm.j9ddr.CorruptDataException;
 import com.ibm.j9ddr.vm29.pointer.U8Pointer;
+import com.ibm.j9ddr.vm29.pointer.generated.J9ShrOffSetPointer;
 import com.ibm.j9ddr.vm29.pointer.generated.CompiledMethodWrapperPointer;
 import com.ibm.j9ddr.vm29.structure.CompiledMethodWrapper;
 import com.ibm.j9ddr.vm29.structure.ShcItem;
 
 public class CompiledMethodWrapperHelper {
-	// #define CMWROMMETHOD(cmw) (((U_8*)(cmw)) + J9SHR_READSRP((cmw)->romMethodOffset))
-	public static U8Pointer CMWROMMETHOD(CompiledMethodWrapperPointer ptr) throws CorruptDataException {
-		return U8Pointer.cast(ptr).add(ptr.romMethodOffset());
-	}	
+	public static U8Pointer CMWROMMETHOD(CompiledMethodWrapperPointer ptr, U8Pointer[] cacheHeader) throws CorruptDataException {
+		if (null == cacheHeader) {
+			return U8Pointer.cast(ptr).add(ptr.romMethodOffset());
+		} else {
+			if (J9ShrOffSetPointer.cast(ptr.romMethodOffsetEA()).offset().eq(0)) {
+				return U8Pointer.NULL;
+			}
+			return cacheHeader[0].add(J9ShrOffSetPointer.cast(ptr.romMethodOffsetEA()).offset());
+		}
+	}
 
 	//	#define CMWDATA(cmw) (((U_8*)(cmw)) + sizeof(CompiledMethodWrapper))
 	public static U8Pointer CMWDATA(CompiledMethodWrapperPointer ptr) {
