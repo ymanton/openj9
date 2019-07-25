@@ -23,6 +23,10 @@
 #ifndef J9SHARED_CACHE_HPP
 #define J9SHARED_CACHE_HPP
 
+#ifndef MULTI_LAYER_CACHE
+#define MULTI_LAYER_CACHE
+#endif
+
 #include "compiler/env/SharedCache.hpp"
 
 #include <stdint.h>
@@ -34,6 +38,33 @@
 class TR_J9VMBase;
 class TR_ResolvedMethod;
 namespace TR { class CompilationInfo; }
+
+class TR_J9SharedCacheInfo
+   {
+public:
+   static void initialize(J9SharedClassConfig *sharedClassConfig);
+
+   static void *pointerFromOffsetInSharedCache(void *offset);
+   static void *offsetInSharedCacheFromPointer(void *ptr);
+   static bool isPointerInSharedCache(void *ptr, void * & cacheOffset
+#ifdef MULTI_LAYER_CACHE
+                               , bool *inReadOnlyCache = NULL
+#endif
+                              );
+   static UDATA getNumDigitsForCacheOffsets() { return _numDigitsForCacheOffsets; }
+
+private:
+#ifdef MULTI_LAYER_CACHE
+   #define J9SH_LAYER_NUM_MAX_VALUE 99
+   static UDATA _cacheLayersStartAddresses[J9SH_LAYER_NUM_MAX_VALUE + 1];
+   static UDATA _cacheLayersSizesInBytes[J9SH_LAYER_NUM_MAX_VALUE + 1];
+   static uint32_t _numCacheLayers;
+#else
+   static UDATA _cacheStartAddress;
+   static UDATA _cacheSizeInBytes;
+#endif
+   static UDATA _numDigitsForCacheOffsets;
+   };
 
 class TR_J9SharedCache : public TR_SharedCache
    {
@@ -80,7 +111,11 @@ public:
 
    TR_OpaqueClassBlock *lookupClassFromChainAndLoader(uintptrj_t *chainData, void *classLoader);
 
-   bool isPointerInSharedCache(void *ptr, void * & cacheOffset);
+   bool isPointerInSharedCache(void *ptr, void * & cacheOffset
+#ifdef MULTI_LAYER_CACHE
+                               , bool *inReadOnlyCache = NULL
+#endif
+                              );
 
    J9ROMClass *startingROMClassOfClassChain(UDATA *classChain);
 
@@ -96,17 +131,17 @@ public:
       J9_SHARED_CACHE_FAILED_TO_ALLOCATE,
       SHARED_CACHE_STORE_ERROR,
       SHARED_CACHE_FULL,
-      // The following are probably equivalent to SHARED_CACHE_FULL - 
+      // The following are probably equivalent to SHARED_CACHE_FULL -
       // they could have failed because of no space but no error code is returned.
       SHARED_CACHE_CLASS_CHAIN_STORE_FAILED,
       AOT_HEADER_STORE_FAILED
       };
-   
+
    static void setSharedCacheDisabledReason(TR_J9SharedCacheDisabledReason state) { _sharedCacheState = state; }
    static TR_J9SharedCacheDisabledReason getSharedCacheDisabledReason() { return _sharedCacheState; }
    static TR_YesNoMaybe isSharedCacheDisabledBecauseFull(TR::CompilationInfo *compInfo);
    static void setStoreSharedDataFailedLength(UDATA length) {_storeSharedDataFailedLength = length; }
-   
+
 private:
    J9JITConfig *jitConfig() { return _jitConfig; }
    J9JavaVM *javaVM() { return _javaVM; }
@@ -143,13 +178,10 @@ private:
 
    TR_AOTStats *_aotStats;
    J9SharedClassConfig *_sharedCacheConfig;
-   UDATA _cacheStartAddress;
-   UDATA _cacheSizeInBytes;
-   UDATA _numDigitsForCacheOffsets;
 
    uint32_t _logLevel;
    bool _verboseHints;
-   
+
    static TR_J9SharedCacheDisabledReason _sharedCacheState;
    static TR_YesNoMaybe                  _sharedCacheDisabledBecauseFull;
    static UDATA                          _storeSharedDataFailedLength;

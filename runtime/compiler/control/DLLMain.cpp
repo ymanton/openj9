@@ -364,6 +364,7 @@ IDATA J9VMDllMain(J9JavaVM* vm, IDATA stage, void * reserved)
             {
             TR::Options::setSharedClassCache(true); // Set to true as long as cache is present and initialized
 
+            TR_J9SharedCacheInfo::initialize(vm->sharedClassConfig);
             TR_J9VMBase *feWithoutThread = TR_J9VMBase::get(vm->jitConfig, 0);
             TR_J9SharedCache *sharedCache = new (PERSISTENT_NEW) TR_J9SharedCache((TR_J9VMBase *)feWithoutThread);
             if (sharedCache != NULL)

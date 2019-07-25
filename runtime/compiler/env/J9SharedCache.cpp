@@ -42,6 +42,133 @@
       c;\
       }
 
+UDATA TR_J9SharedCacheInfo::_cacheLayersStartAddresses[J9SH_LAYER_NUM_MAX_VALUE + 1];
+UDATA TR_J9SharedCacheInfo::_cacheLayersSizesInBytes[J9SH_LAYER_NUM_MAX_VALUE + 1];
+uint32_t TR_J9SharedCacheInfo::_numCacheLayers;
+UDATA TR_J9SharedCacheInfo::_numDigitsForCacheOffsets;
+
+void
+TR_J9SharedCacheInfo::initialize(J9SharedClassConfig *sharedCacheConfig)
+   {
+   _numDigitsForCacheOffsets = 8;
+#ifdef MULTI_LAYER_CACHE
+   J9SharedClassCacheDescriptor *lastCache = sharedCacheConfig->cacheDescriptorList;
+   J9SharedClassCacheDescriptor *curCache = lastCache;
+   UDATA cummulativeCacheSizeInBytes = 0;
+   int n = 0;
+   do
+      {
+      _cacheLayersStartAddresses[n] = reinterpret_cast<UDATA>(curCache->cacheStartAddress);
+      _cacheLayersSizesInBytes[n] = curCache->cacheSizeBytes;
+      cummulativeCacheSizeInBytes += curCache->cacheSizeBytes;
+      curCache = curCache->next;
+      ++n;
+      }
+   while (curCache != lastCache);
+   _numCacheLayers = n;
+   // We walked the list of caches from layer n->0, but we want offsets and sizes to be from 0->n, reverse the arrays
+   for (int i = 0; i < (n / 2); ++i)
+      {
+      std::swap(_cacheLayersStartAddresses[i], _cacheLayersStartAddresses[n - i - 1]);
+      std::swap(_cacheLayersSizesInBytes[i], _cacheLayersSizesInBytes[n - i - 1]);
+      }
+   // Initialize the rest of the entries to 0
+   memset(&_cacheLayersStartAddresses[n], 0, sizeof(_cacheLayersStartAddresses[0]) * (J9SH_LAYER_NUM_MAX_VALUE + 1 - n));
+   memset(&_cacheLayersSizesInBytes[n], 0, sizeof(_cacheLayersSizesInBytes[0]) * (J9SH_LAYER_NUM_MAX_VALUE + 1 - n));
+   if (cummulativeCacheSizeInBytes > (UDATA)0xFFFFFFFF)
+      _numDigitsForCacheOffsets = 16;
+#else
+   _cacheStartAddress = (UDATA)sharedCacheConfig->cacheDescriptorList->cacheStartAddress;
+   _cacheSizeInBytes = sharedCacheConfig->cacheDescriptorList->cacheSizeBytes;
+   if (_cacheSizeInBytes > (UDATA)0xFFFFFFFF)
+      _numDigitsForCacheOffsets = 16;
+#endif
+#if 0 // TODO Logging busted here, only works from TR_J9SharedCache
+   LOG(5, { log("\t_sharedCacheConfig %p\n", sharedCacheConfig); });
+#ifdef MULTI_LAYER_CACHE
+   LOG(5, { log("\t_numCacheLayers %d\n", _numCacheLayers); });
+   for (int i = 0; i < _numCacheLayers; ++i)
+      {
+      LOG(5, { log("\t_cacheStartAddress[%d] %p\n", i, _cacheLayersStartAddresses[i]); });
+      LOG(5, { log("\t_cacheSizeInBytes[%d] %p\n", i, _cacheLayersSizesInBytes[i]); });
+      LOG(5, { log("\tlast cache address %p\n", _cacheLayersStartAddresses[i] + _cacheLayersSizesInBytes[i] - 1); });
+      }
+#else
+   LOG(5, { log("\t_cacheStartAddress %p\n", _cacheStartAddress); });
+   LOG(5, { log("\t_cacheSizeInBytes %p\n", _cacheSizeInBytes); });
+   LOG(5, { log("\tlast cache address %p\n", _cacheStartAddress + _cacheSizeInBytes - 1); });
+#endif
+#endif
+   }
+
+void *
+TR_J9SharedCacheInfo::pointerFromOffsetInSharedCache(void *offset)
+   {
+#ifdef MULTI_LAYER_CACHE
+   UDATA offsetValue = reinterpret_cast<UDATA>(offset);
+   int i;
+   for (i = 0; i < _numCacheLayers && offsetValue >= _cacheLayersSizesInBytes[i]; ++i)
+      {
+      offsetValue -= _cacheLayersSizesInBytes[i];
+      }
+   TR_ASSERT_FATAL(i < _numCacheLayers, "OOB pointer");
+   // Maintains the same behaviour as !MULTI_LAYER_CACHE by returning an invalid pointer for invalid offsets.
+   return reinterpret_cast<void *>(offsetValue + _cacheLayersStartAddresses[i]);
+#else
+   return (void *) ((UDATA)offset + _cacheStartAddress);
+#endif
+   }
+
+void *
+TR_J9SharedCacheInfo::offsetInSharedCacheFromPointer(void *ptr)
+   {
+#ifdef MULTI_LAYER_CACHE
+   void *offset = NULL;
+   bool ptrInCache = isPointerInSharedCache(ptr, offset);
+   TR_ASSERT_FATAL(ptrInCache, "OOB offset");
+   // Differs from !MULTI_LAYER_CACHE by returning 0 (rather than an invalid offset) for invalid pointers.
+   return offset;
+#else
+   return (void *) ((UDATA)ptr - _cacheStartAddress);
+#endif
+   }
+
+bool
+TR_J9SharedCacheInfo::isPointerInSharedCache(void *ptr, void * & cacheOffset
+#ifdef MULTI_LAYER_CACHE
+                                         , /* out */ bool *inReadOnlyCache
+#endif
+)
+   {
+#ifdef MULTI_LAYER_CACHE
+   UDATA offset = 0;
+   UDATA ptrValue = reinterpret_cast<UDATA>(ptr);
+   for (int i = 0; i < _numCacheLayers; ++i)
+      {
+      UDATA cacheStart = _cacheLayersStartAddresses[i];
+      UDATA cacheEnd = cacheStart + _cacheLayersSizesInBytes[i];
+      if ((ptrValue >= cacheStart) && (ptrValue < cacheEnd))
+         {
+         cacheOffset = reinterpret_cast<void *>(offset + (ptrValue - cacheStart));
+         // Only the last (top-most) layer is writable, the rest are read-only.
+         if (inReadOnlyCache)
+            *inReadOnlyCache = i < (_numCacheLayers - 1);
+         return true;
+         }
+      offset += _cacheLayersSizesInBytes[i];
+      }
+   return false;
+#else
+   UDATA offset = (UDATA) offsetInSharedCacheFromPointer(ptr);
+   if (offset < _cacheSizeInBytes)
+      {
+      cacheOffset = (void*)offset;
+      return true;
+      }
+   return false;
+#endif
+   }
+
 TR_J9SharedCache::TR_J9SharedCacheDisabledReason TR_J9SharedCache::_sharedCacheState = TR_J9SharedCache::UNINITIALIZED;
 TR_YesNoMaybe TR_J9SharedCache::_sharedCacheDisabledBecauseFull = TR_maybe;
 UDATA TR_J9SharedCache::_storeSharedDataFailedLength = 0;
@@ -99,11 +226,6 @@ TR_J9SharedCache::TR_J9SharedCache(TR_J9VMBase *fe)
    _compInfo = TR::CompilationInfo::get(_jitConfig);
    _aotStats = fe->getPrivateConfig()->aotStats;
    _sharedCacheConfig = _javaVM->sharedClassConfig;
-   _cacheStartAddress = (UDATA) _sharedCacheConfig->cacheDescriptorList->cacheStartAddress;
-   _cacheSizeInBytes = _sharedCacheConfig->cacheDescriptorList->cacheSizeBytes;
-   _numDigitsForCacheOffsets=8;
-   if (_cacheSizeInBytes > (UDATA)0xFFFFFFFF)
-      _numDigitsForCacheOffsets=16;
 
    _hintsEnabledMask = 0;
    if (!TR::Options::getAOTCmdLineOptions()->getOption(TR_DisableSharedCacheHints))
@@ -113,15 +235,9 @@ TR_J9SharedCache::TR_J9SharedCache(TR_J9VMBase *fe)
    if (_initialHintSCount == 0)
       _initialHintSCount = 1;
 
-
    _logLevel = std::max(TR::Options::getAOTCmdLineOptions()->getAotrtDebugLevel(), TR::Options::getCmdLineOptions()->getAotrtDebugLevel());
 
    _verboseHints = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerboseSCHints);
-
-   LOG(5, { log("\t_sharedCacheConfig %p\n", _sharedCacheConfig); });
-   LOG(5, { log("\t_cacheStartAddress %p\n", _cacheStartAddress); });
-   LOG(5, { log("\t_cacheSizeInBytes %p\n", _cacheSizeInBytes); });
-   LOG(5, { log("\tlast cache address %p\n", _cacheStartAddress + _cacheSizeInBytes); });
    }
 
 void
@@ -401,25 +517,23 @@ TR_J9SharedCache::matchRAMclassFromROMclass(J9ROMClass * clazz, TR::Compilation 
 void *
 TR_J9SharedCache::pointerFromOffsetInSharedCache(void *offset)
    {
-   return (void *) ((UDATA)offset + _cacheStartAddress);
+   return TR_J9SharedCacheInfo::pointerFromOffsetInSharedCache(offset);
    }
 
 void *
 TR_J9SharedCache::offsetInSharedCacheFromPointer(void *ptr)
    {
-   return (void *) ((UDATA)ptr - _cacheStartAddress);
+   return TR_J9SharedCacheInfo::offsetInSharedCacheFromPointer(ptr);
    }
 
 bool
-TR_J9SharedCache::isPointerInSharedCache(void *ptr, void * & cacheOffset)
+TR_J9SharedCache::isPointerInSharedCache(void *ptr, void * & cacheOffset
+#ifdef MULTI_LAYER_CACHE
+                                         , /* out param */ bool *inReadOnlyCache
+#endif
+                                        )
    {
-   UDATA offset = (UDATA) offsetInSharedCacheFromPointer(ptr);
-   if (offset < _cacheSizeInBytes)
-      {
-      cacheOffset = (void*)offset;
-      return true;
-      }
-   return false;
+   return TR_J9SharedCacheInfo::isPointerInSharedCache(ptr, cacheOffset, inReadOnlyCache);
    }
 
 J9ROMClass *
@@ -437,19 +551,20 @@ TR_J9SharedCache::startingROMClassOfClassChain(UDATA *classChain)
 void
 TR_J9SharedCache::convertUnsignedOffsetToASCII(UDATA offset, char *buffer)
    {
-   for (int i = _numDigitsForCacheOffsets; i >= 0; i--, offset >>= 4)
+   UDATA numDigitsForCacheOffsets = TR_J9SharedCacheInfo::getNumDigitsForCacheOffsets();
+   for (int i = numDigitsForCacheOffsets; i >= 0; i--, offset >>= 4)
       {
       uint8_t lowNibble = offset & 0xf;
       buffer[i] = (lowNibble > 9 ?  lowNibble - 10 + 'a' :  lowNibble + '0');
       }
-   buffer[_numDigitsForCacheOffsets] = 0;
+   buffer[numDigitsForCacheOffsets] = 0;
    TR_ASSERT(offset == 0, "Unsigned offset unexpectedly not fully converted to ASCII");
    }
 
 void
 TR_J9SharedCache::createClassKey(UDATA classOffsetInCache, char *key, uint32_t & keyLength)
    {
-   keyLength = _numDigitsForCacheOffsets;
+   keyLength = TR_J9SharedCacheInfo::getNumDigitsForCacheOffsets();
    convertUnsignedOffsetToASCII(classOffsetInCache, key);
    }
 
@@ -661,8 +776,9 @@ bool
 TR_J9SharedCache::romclassMatchesCachedVersion(J9ROMClass *romClass, UDATA * & chainPtr, UDATA *chainEnd)
    {
    J9UTF8 * className = J9ROMCLASS_CLASSNAME(romClass);
-   LOG(9, { log("\t\tExamining romclass %p (%.*s) offset %d, comparing to %d\n", romClass, J9UTF8_LENGTH(className), J9UTF8_DATA(className), (UDATA)romClass - _cacheStartAddress, *chainPtr); });
-   if (chainPtr > chainEnd || ((UDATA)romClass - _cacheStartAddress) != *chainPtr++)
+   UDATA romClassOffset = reinterpret_cast<UDATA>(offsetInSharedCacheFromPointer(romClass));
+   LOG(9, { log("\t\tExamining romclass %p (%.*s) offset %d, comparing to %d\n", romClass, J9UTF8_LENGTH(className), J9UTF8_DATA(className), romClassOffset, *chainPtr); });
+   if (chainPtr > chainEnd || romClassOffset != *chainPtr++)
       return false;
    return true;
    }
@@ -761,7 +877,7 @@ TR_OpaqueClassBlock *
 TR_J9SharedCache::lookupClassFromChainAndLoader(uintptrj_t *chainData, void *classLoader)
    {
    UDATA *ptrToRomClassOffset = chainData+1;
-   J9ROMClass *romClass = (J9ROMClass *)(_cacheStartAddress + *ptrToRomClassOffset);
+   J9ROMClass *romClass = (J9ROMClass *)(pointerFromOffsetInSharedCache((void *)(*ptrToRomClassOffset)));
    J9UTF8 *className = J9ROMCLASS_CLASSNAME(romClass);
    TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
    J9VMThread *vmThread = fej9->getCurrentVMThread();

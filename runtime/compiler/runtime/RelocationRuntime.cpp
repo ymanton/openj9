@@ -725,14 +725,14 @@ TR_RelocationRuntime::validateAOTHeader(J9JavaVM *pjavaVM, TR_FrontEnd *fe, J9VM
    }
 
 void *
-TR_RelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *pjavaVM)
+TR_RelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *pjavaVM, /* out */ bool *inReadOnlyCache)
    {
    TR_ASSERT(0, "Error: isROMClassInSharedCaches not supported in this relocation runtime");
    return NULL;
    }
 
 bool
-TR_RelocationRuntime::isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *pjavaVM)
+TR_RelocationRuntime::isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *pjavaVM, /* out */ bool *inReadOnlyCache)
    {
    TR_ASSERT(0, "Error: isRomClassForMethodInSharedCache not supported in this relocation runtime");
    return false;
@@ -1151,11 +1151,13 @@ TR_SharedCacheRelocationRuntime::storeAOTHeader(J9JavaVM *pjavaVM, TR_FrontEnd *
 
 
 void *
-TR_SharedCacheRelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *pjavaVM)
+TR_SharedCacheRelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *pjavaVM, /* out */ bool *inReadOnlyCache)
    {
    j9thread_monitor_enter(javaVM()->sharedClassConfig->configMonitor);
    J9SharedClassCacheDescriptor *currentCacheDescriptor = javaVM()->sharedClassConfig->cacheDescriptorList;
    bool matchFound = false;
+
+   // TODO: Clean this up to use TR_J9SharedCacheInfo
 
    while (!matchFound && currentCacheDescriptor)
       {
@@ -1170,6 +1172,10 @@ TR_SharedCacheRelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J
          break; // Since list is circular, break if we are about to loop back
       currentCacheDescriptor = currentCacheDescriptor->next;
       }
+
+   if (matchFound && inReadOnlyCache)
+      *inReadOnlyCache = currentCacheDescriptor != javaVM()->sharedClassConfig->cacheDescriptorList;
+
    j9thread_monitor_exit(javaVM()->sharedClassConfig->configMonitor);
    if (matchFound)
       {
@@ -1182,7 +1188,7 @@ TR_SharedCacheRelocationRuntime::isROMClassInSharedCaches(UDATA romClassValue, J
    }
 
 bool
-TR_SharedCacheRelocationRuntime::isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *pjavaVM)
+TR_SharedCacheRelocationRuntime::isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *pjavaVM, /* out */ bool *inReadOnlyCache)
    {
 #if 1
    J9ROMClass *romClass = J9_CLASS_FROM_METHOD(method)->romClass;
@@ -1193,12 +1199,12 @@ TR_SharedCacheRelocationRuntime::isRomClassForMethodInSharedCache(J9Method *meth
    j9thread_monitor_exit(javaVM()->sharedClassConfig->configMonitor);
    return isRomClassForMethodInSharedCache;
 #else
-   bool isRomClassForMethodInSharedCache = isROMClassInSharedCaches((UDATA)romClass, javaVM()) ? true : false;
-   return isRomClassForMethodInSharedCache;
+   return isROMClassInSharedCaches((UDATA)romClass, javaVM(), inReadOnlyCache);
 #endif
 #endif
    }
 
+// TODO: Check if this guy's callers need to be aware of inReadOnlyCache
 TR_YesNoMaybe
 TR_SharedCacheRelocationRuntime::isMethodInSharedCache(J9Method *method, J9JavaVM *pjavaVM)
    {

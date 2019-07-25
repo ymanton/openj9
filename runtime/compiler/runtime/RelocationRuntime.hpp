@@ -188,8 +188,8 @@ class TR_RelocationRuntime {
       virtual TR_AOTHeader *createAOTHeader(J9JavaVM *javaVM, TR_FrontEnd *fe);
       virtual bool validateAOTHeader(J9JavaVM *javaVM, TR_FrontEnd *fe, J9VMThread *curThread);
 
-      virtual void *isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *javaVM);
-      virtual bool isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *javaVM);
+      virtual void *isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *javaVM, /* out */ bool *inReadOnlyCache = NULL);
+      virtual bool isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *javaVM, /* out */ bool *inReadOnlyCache = NULL);
       virtual TR_YesNoMaybe isMethodInSharedCache(J9Method *method, J9JavaVM *javaVM);
       virtual TR_OpaqueClassBlock *getClassFromCP(J9VMThread *vmThread, J9JavaVM *javaVM, J9ConstantPool *constantPool, I_32 cpIndex, bool isStatic);
 
@@ -359,8 +359,8 @@ public:
       virtual TR_AOTHeader *createAOTHeader(J9JavaVM *javaVM, TR_FrontEnd *fe);
       virtual bool validateAOTHeader(J9JavaVM *javaVM, TR_FrontEnd *fe, J9VMThread *curThread);
 
-      virtual void *isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *javaVM);
-      virtual bool isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *javaVM);
+      virtual void *isROMClassInSharedCaches(UDATA romClassValue, J9JavaVM *javaVM, /* out */ bool *inReadOnlyCache = NULL);
+      virtual bool isRomClassForMethodInSharedCache(J9Method *method, J9JavaVM *javaVM, /* out */ bool *inReadOnlyCache = NULL);
       virtual TR_YesNoMaybe isMethodInSharedCache(J9Method *method, J9JavaVM *javaVM);
 
       virtual TR_OpaqueClassBlock *getClassFromCP(J9VMThread *vmThread, J9JavaVM *javaVM, J9ConstantPool *constantPool, I_32 cpIndex, bool isStatic);
