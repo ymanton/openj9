@@ -88,7 +88,7 @@ TPF_INCLUDES += $(foreach d,$(TPF_ROOT),-isystem $d/noship/include)
 TPF_INCLUDES += $(foreach d,$(TPF_ROOT),-isystem $d)
 
 TPF_FLAGS += -fexec-charset=ISO-8859-1 -fmessage-length=0 -funsigned-char -fverbose-asm -fno-builtin-abort -fno-builtin-exit -ffloat-store -gdwarf-2 -Wno-format-extra-args -Wno-int-to-pointer-cast -Wno-unused-but-set-variable -Wno-write-strings -fno-delete-null-pointer-checks -fno-tree-dse -fno-lifetime-dse -fno-optimize-strlen
- 
+
 
 #
 # First setup C and C++ compilers.
@@ -229,10 +229,11 @@ endif
 #
 # Finally setup the linker
 #
+SOLINK_STRIP?=-Wl,-S
 SOLINK_CMD?=$(CXX)
 
 SOLINK_FLAGS+=
-SOLINK_FLAGS_PROD+=-Wl,-S
+SOLINK_FLAGS_PROD+=-$(SOLINK_STRIP)
 
 SOLINK_LIBPATH+=$(PRODUCT_LIBPATH)
 SOLINK_SLINK+=$(PRODUCT_SLINK) j9thr$(J9_VERSION) j9hookable$(J9_VERSION)
