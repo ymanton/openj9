@@ -2844,6 +2844,8 @@ void TR::CompilationInfo::stopCompilationThreads()
 #endif
       } // if (printCompStats)
 
+   fprintf(stderr, "*** Methods not eligible for AOT compilation because ROM class is in a read-only SCC layer = %u\n", _statNumMethodsNotAotEligibleReadOnlyLayer);
+
    if (TR::Options::getAOTCmdLineOptions()->getOption(TR_EnableAOTRelocationTiming))
       {
       fprintf(stderr, "Time spent relocating all AOT methods: %u ms\n", this->getAotRelocationTime()/1000);
@@ -6537,6 +6539,18 @@ TR::CompilationInfoPerThreadBase::preCompilationTasks(J9VMThread * vmThread,
 #endif
          (!TR::Options::getAOTCmdLineOptions()->getOption(TR_AOTCompileOnlyFromBootstrap) ||
            TR_J9VMBase::get(jitConfig, vmThread)->isClassLibraryMethod((TR_OpaqueMethodBlock *)method), true);
+
+      if (!eligibleForRelocatableCompile &&
+         TR::Options::sharedClassCache() &&
+         !details.isNewInstanceThunk() &&
+         !entry->isJNINative() &&
+         !details.isMethodHandleThunk() &&
+         !TR::CompilationInfo::isCompiled(method) &&
+         !entry->isDLTCompile() &&
+         !entry->_doNotUseAotCodeFromSharedCache &&
+         reloRuntime->isRomClassForMethodInSharedCache(method, javaVM, /* out */ &inReadOnlyCache) &&
+         inReadOnlyCache)
+         _compInfo._statNumMethodsNotAotEligibleReadOnlyLayer++;
 
       bool sharedClassTest = eligibleForRelocatableCompile &&
                              !TR::Options::getAOTCmdLineOptions()->getOption(TR_NoStoreAOT);

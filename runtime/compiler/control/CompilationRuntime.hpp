@@ -843,7 +843,7 @@ public:
                              or OMRPORT_MEMINFO_NOT_AVAILABLE in case of error
    */
    uint64_t computeFreePhysicalMemory(bool &incompleteInfo);
- 
+
    /**
    * @brief Compute free physical memory taking into account container limits and caches it for later use
    *
@@ -853,7 +853,7 @@ public:
    *
    * @param incompleteInfo   [OUTPUT] Boolean indicating that cached/buffered memory couldn't be read
    * @param updatePeriodMs   Indicates how often the cached values are refreshed
-   * @return                 A value representing the free physicalMemory 
+   * @return                 A value representing the free physicalMemory
                              or OMRPORT_MEMINFO_NOT_AVAILABLE in case of error
    */
    uint64_t computeAndCacheFreePhysicalMemory(bool &incompleteInfo, int64_t updatePeriodMs=-1);
@@ -999,6 +999,8 @@ private:
    uint32_t               _statNumMethodsFromJProfilingQueue;
    uint32_t               _statTotalAotQueryTime;
    uint32_t               _statTotalAotRelocationTime;
+
+   uint32_t               _statNumMethodsNotAotEligibleReadOnlyLayer;
 
    uint32_t               _numberBytesReadInaccessible;
    uint32_t               _numberBytesWriteInaccessible;

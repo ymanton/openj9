@@ -4493,7 +4493,7 @@ void printIprofilerStats(TR::Options *options, J9JITConfig * jitConfig, TR_IProf
    if (!options->getOption(TR_DisableInterpreterProfiling))
       {
       PORT_ACCESS_FROM_JITCONFIG(jitConfig);
-      if (TR::Options::getCmdLineOptions()->getOption(TR_VerboseInterpreterProfiling))
+      if (true || TR::Options::getCmdLineOptions()->getOption(TR_VerboseInterpreterProfiling))
          {
          j9tty_printf(PORTLIB, "VM shutdown event received.\n");
          j9tty_printf(PORTLIB, "Total events: %d\n", TEST_events);
@@ -7099,4 +7099,3 @@ int32_t setUpHooks(J9JavaVM * javaVM, J9JITConfig * jitConfig, TR_FrontEnd * vm)
 
 
 } /* extern "C" */
-
