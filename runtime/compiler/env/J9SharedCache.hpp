@@ -142,6 +142,14 @@ public:
    static void setStoreSharedDataFailedLength(UDATA length) {_storeSharedDataFailedLength = length; }
 
 private:
+   struct SCCHint
+   {
+   SCCHint() : flags(0), count(0) {}
+   void clear() { flags = 0; count = 0; }
+   uint16_t flags;
+   uint16_t count; // XXX: Change to data
+   };
+
    J9JITConfig *jitConfig() { return _jitConfig; }
    J9JavaVM *javaVM() { return _javaVM; }
    TR_J9VMBase *fe() { return _fe; }
@@ -151,7 +159,7 @@ private:
 
    void log(char *format, ...);
 
-   uint32_t getHint(J9VMThread * vmThread, J9Method *method);
+   SCCHint getHint(J9VMThread * vmThread, J9Method *method);
 
    void convertUnsignedOffsetToASCII(UDATA offset, char *myBuffer);
    void createClassKey(UDATA classOffsetInCache, char *key, uint32_t & keyLength);
