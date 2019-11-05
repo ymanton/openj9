@@ -147,6 +147,7 @@ TR_RelocationRecordGroup::applyRelocations(TR_RelocationRuntime *reloRuntime,
          {
          if (aotStats)
             aotStats->numWellKnownClassesValidationsFailed++;
+         RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
          return compilationAotClassReloFailure;
          }
       }
@@ -199,6 +200,7 @@ TR_RelocationRecordGroup::handleRelocation(TR_RelocationRuntime *reloRuntime,
       case TR_RelocationRecordAction::failCompilation:
          {
          RELO_LOG(reloRuntime->reloLogger(), 6, "\tINTERNAL ERROR!\n");
+         RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
          return compilationAotClassReloFailure;
          }
       default:
@@ -207,6 +209,7 @@ TR_RelocationRecordGroup::handleRelocation(TR_RelocationRuntime *reloRuntime,
          }
       }
 
+   RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
    return compilationAotClassReloFailure;
    }
 
@@ -1484,6 +1487,7 @@ int32_t TR_RelocationRecordRamMethodConst::applyRelocation(TR_RelocationRuntime 
 
    if (!ramMethod)
       {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
       }
 
@@ -1500,8 +1504,7 @@ TR_RelocationRecordDirectJNICall::applyRelocation(TR_RelocationRuntime *reloRunt
    J9ConstantPool * newConstantPool =(J9ConstantPool *) computeNewConstantPool(reloRuntime, reloTarget, constantPool(reloTarget));
    TR_OpaqueMethodBlock *ramMethod = getMethodFromCP(reloRuntime, newConstantPool, cpIndex(reloTarget));
 
-   if (!ramMethod) return compilationAotClassReloFailure;
-
+   if (!ramMethod) { RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__); return compilationAotClassReloFailure; }
 
    TR_ResolvedMethod *callerResolvedMethod = reloRuntime->fej9()->createResolvedMethod(reloRuntime->comp()->trMemory(), ramMethod, NULL);
    void * newAddress = NULL;
@@ -1509,7 +1512,7 @@ TR_RelocationRecordDirectJNICall::applyRelocation(TR_RelocationRuntime *reloRunt
       newAddress = callerResolvedMethod->startAddressForJNIMethod(reloRuntime->comp());
 
 
-   if (!newAddress) return compilationAotClassReloFailure;
+   if (!newAddress) { RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__); return compilationAotClassReloFailure; }
 
    RELO_LOG(reloLogger, 6, "\tJNI call relocation: found JNI target address %p\n", newAddress);
 
@@ -1686,7 +1689,7 @@ TR_RelocationRecordClassAddress::applyRelocation(TR_RelocationRuntime *reloRunti
    uintptrj_t newConstantPool = computeNewConstantPool(reloRuntime, reloTarget, constantPool(reloTarget));
    TR_OpaqueClassBlock *newAddress = computeNewClassAddress(reloRuntime, newConstantPool, inlinedSiteIndex(reloTarget), cpIndex(reloTarget));
 
-   if (!newAddress) return compilationAotClassReloFailure;
+   if (!newAddress) { RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__); return compilationAotClassReloFailure; }
 
    if (TR::CodeGenerator::wantToPatchClassPointer(reloRuntime->comp(), newAddress, reloLocation))
       {
@@ -1706,7 +1709,7 @@ TR_RelocationRecordClassAddress::applyRelocation(TR_RelocationRuntime *reloRunti
    uintptrj_t newConstantPool = computeNewConstantPool(reloRuntime, reloTarget, oldValue);
    TR_OpaqueClassBlock *newAddress = computeNewClassAddress(reloRuntime, newConstantPool, inlinedSiteIndex(reloTarget), cpIndex(reloTarget));
 
-   if (!newAddress) return compilationAotClassReloFailure;
+   if (!newAddress) { RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__); return compilationAotClassReloFailure; }
 
    if (TR::CodeGenerator::wantToPatchClassPointer(reloRuntime->comp(), newAddress, reloLocationHigh))
       {
@@ -3151,6 +3154,7 @@ TR_RelocationRecordValidateClass::getClassFromCP(TR_RelocationRuntime *reloRunti
 int32_t
 TR_RelocationRecordValidateClass::failureCode()
    {
+   //RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
    return compilationAotClassReloFailure;
    }
 
@@ -3319,6 +3323,7 @@ TR_RelocationRecordValidateArbitraryClass::applyRelocation(TR_RelocationRuntime 
    if (aotStats)
       aotStats->numClassValidationsFailed++;
 
+   RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
    return compilationAotClassReloFailure;
    }
 
@@ -3341,7 +3346,10 @@ TR_RelocationRecordValidateClassByName::applyRelocation(TR_RelocationRuntime *re
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassByNameRecord(classID, beholderID, classChain))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3366,7 +3374,10 @@ TR_RelocationRecordValidateProfiledClass::applyRelocation(TR_RelocationRuntime *
    if (reloRuntime->comp()->getSymbolValidationManager()->validateProfiledClassRecord(classID, classChainForCL, classChain))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3387,7 +3398,10 @@ TR_RelocationRecordValidateClassFromCP::applyRelocation(TR_RelocationRuntime *re
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassFromCPRecord(classID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3410,7 +3424,10 @@ TR_RelocationRecordValidateDefiningClassFromCP::applyRelocation(TR_RelocationRun
    if (reloRuntime->comp()->getSymbolValidationManager()->validateDefiningClassFromCPRecord(classID, beholderID, cpIndex, isStatic))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3431,7 +3448,10 @@ TR_RelocationRecordValidateStaticClassFromCP::applyRelocation(TR_RelocationRunti
    if (reloRuntime->comp()->getSymbolValidationManager()->validateStaticClassFromCPRecord(classID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3450,7 +3470,10 @@ TR_RelocationRecordValidateArrayClassFromComponentClass::applyRelocation(TR_Relo
    if (reloRuntime->comp()->getSymbolValidationManager()->validateArrayClassFromComponentClassRecord(arrayClassID, componentClassID))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3469,7 +3492,10 @@ TR_RelocationRecordValidateSuperClassFromClass::applyRelocation(TR_RelocationRun
    if (reloRuntime->comp()->getSymbolValidationManager()->validateSuperClassFromClassRecord(superClassID, childClassID))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3494,7 +3520,10 @@ TR_RelocationRecordValidateClassInstanceOfClass::applyRelocation(TR_RelocationRu
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassInstanceOfClassRecord(classOneID, classTwoID, objectTypeIsFixed, castTypeIsFixed, isInstanceOf))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3514,7 +3543,10 @@ TR_RelocationRecordValidateSystemClassByName::applyRelocation(TR_RelocationRunti
    if (reloRuntime->comp()->getSymbolValidationManager()->validateSystemClassByNameRecord(systemClassID, classChain))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3535,7 +3567,10 @@ TR_RelocationRecordValidateClassFromITableIndexCP::applyRelocation(TR_Relocation
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassFromITableIndexCPRecord(classID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3556,7 +3591,10 @@ TR_RelocationRecordValidateDeclaringClassFromFieldOrStatic::applyRelocation(TR_R
    if (reloRuntime->comp()->getSymbolValidationManager()->validateDeclaringClassFromFieldOrStaticRecord(classID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3575,7 +3613,10 @@ TR_RelocationRecordValidateConcreteSubClassFromClass::applyRelocation(TR_Relocat
    if (reloRuntime->comp()->getSymbolValidationManager()->validateConcreteSubClassFromClassRecord(childClassID, superClassID))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3595,7 +3636,10 @@ TR_RelocationRecordValidateClassChain::applyRelocation(TR_RelocationRuntime *rel
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassChainRecord(classID, classChain))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3616,7 +3660,10 @@ TR_RelocationRecordValidateMethodFromClass::applyRelocation(TR_RelocationRuntime
    if (reloRuntime->comp()->getSymbolValidationManager()->validateMethodFromClassRecord(methodID, beholderID, index))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3642,7 +3689,10 @@ TR_RelocationRecordValidateStaticMethodFromCP::applyRelocation(TR_RelocationRunt
    if (reloRuntime->comp()->getSymbolValidationManager()->validateStaticMethodFromCPRecord(methodID, definingClassID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3668,7 +3718,10 @@ TR_RelocationRecordValidateSpecialMethodFromCP::applyRelocation(TR_RelocationRun
    if (reloRuntime->comp()->getSymbolValidationManager()->validateSpecialMethodFromCPRecord(methodID, definingClassID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3691,7 +3744,10 @@ TR_RelocationRecordValidateVirtualMethodFromCP::applyRelocation(TR_RelocationRun
    if (reloRuntime->comp()->getSymbolValidationManager()->validateVirtualMethodFromCPRecord(methodID, definingClassID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3717,7 +3773,10 @@ TR_RelocationRecordValidateVirtualMethodFromOffset::applyRelocation(TR_Relocatio
    if (reloRuntime->comp()->getSymbolValidationManager()->validateVirtualMethodFromOffsetRecord(methodID, definingClassID, beholderID, virtualCallOffset, ignoreRtResolve))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3742,7 +3801,10 @@ TR_RelocationRecordValidateInterfaceMethodFromCP::applyRelocation(TR_RelocationR
    if (reloRuntime->comp()->getSymbolValidationManager()->validateInterfaceMethodFromCPRecord(methodID, definingClassID, beholderID, lookupID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3765,7 +3827,10 @@ TR_RelocationRecordValidateImproperInterfaceMethodFromCP::applyRelocation(TR_Rel
    if (reloRuntime->comp()->getSymbolValidationManager()->validateImproperInterfaceMethodFromCPRecord(methodID, definingClassID, beholderID, cpIndex))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3792,7 +3857,10 @@ TR_RelocationRecordValidateMethodFromClassAndSig::applyRelocation(TR_RelocationR
    if (reloRuntime->comp()->getSymbolValidationManager()->validateMethodFromClassAndSignatureRecord(methodID, definingClassID, lookupClassID, beholderID, static_cast<J9ROMMethod *>(romMethod)))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3813,7 +3881,10 @@ TR_RelocationRecordValidateStackWalkerMaySkipFrames::applyRelocation(TR_Relocati
    if (reloRuntime->comp()->getSymbolValidationManager()->validateStackWalkerMaySkipFramesRecord(methodID, methodClassID, skipFrames))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3832,7 +3903,10 @@ TR_RelocationRecordValidateClassInfoIsInitialized::applyRelocation(TR_Relocation
    if (reloRuntime->comp()->getSymbolValidationManager()->validateClassInfoIsInitializedRecord(classID, wasInitialized))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3864,7 +3938,10 @@ TR_RelocationRecordValidateMethodFromSingleImpl::applyRelocation(TR_RelocationRu
                                                                                                     (TR_YesNoMaybe)useGetResolvedInterfaceMethod))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3893,7 +3970,10 @@ TR_RelocationRecordValidateMethodFromSingleInterfaceImpl::applyRelocation(TR_Rel
                                                                                                              callerMethodID))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 int32_t
@@ -3922,7 +4002,10 @@ TR_RelocationRecordValidateMethodFromSingleAbstractImpl::applyRelocation(TR_Relo
                                                                                                             callerMethodID))
       return 0;
    else
+      {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
+      }
    }
 
 void
@@ -3964,6 +4047,7 @@ TR_RelocationRecordSymbolFromManager::applyRelocation(TR_RelocationRuntime *relo
       }
    else
       {
+      RELO_LOG(reloRuntime->reloLogger(), 6, "\tAbout to return compilationAotClassReloFailure @ ln %d\n", __LINE__);
       return compilationAotClassReloFailure;
       }
 

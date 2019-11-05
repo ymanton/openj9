@@ -482,8 +482,14 @@ TR_RelocationRuntime::relocateAOTCodeAndData(U_8 *tempDataStart,
             {
             _returnCode = reloGroup.applyRelocations(this, reloTarget(), newMethodCodeStart() + codeCacheDelta());
             }
+         catch (std::exception &e)
+            {
+            RELO_LOG(reloLogger(), 6, "\tAbout to set compilationAotClassReloFailure @ ln %d in response to std::exception %s\n", __LINE__, e.what());
+            _returnCode = compilationAotClassReloFailure;
+            }
          catch (...)
             {
+            RELO_LOG(reloLogger(), 6, "\tAbout to set compilationAotClassReloFailure @ ln %d\n", __LINE__);
             _returnCode = compilationAotClassReloFailure;
             }
 
