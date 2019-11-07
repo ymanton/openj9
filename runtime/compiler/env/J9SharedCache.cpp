@@ -254,6 +254,10 @@ void
 TR_J9SharedCache::addHint(J9Method * method, TR_SharedCacheHint theHint)
    {
 #if defined(J9VM_OPT_SHARED_CLASSES) && (defined(TR_HOST_X86) || defined(TR_HOST_POWER) || defined(TR_HOST_S390) || defined(TR_HOST_ARM) || defined(TR_HOST_ARM64))
+   static const char *scountsf = feGetEnv("TR_failedValidationSCountScaleFactor");
+   static const char *hintcountsf = feGetEnv("TR_failedValidationHintCountScaleFactor");
+   static int FAILED_VALIDATION_SCOUNT_SCALE_FACTOR = scountsf ? atoi(scountsf) : 10;
+   static int FAILED_VALIDATION_HINTCOUNT_SCALE_FACTOR = hintcountsf ? atoi(hintcountsf) : 10;
    static bool SCfull = false;
    uint16_t newHint = ((uint16_t)theHint) & _hintsEnabledMask;
    if (newHint)
@@ -285,12 +289,12 @@ TR_J9SharedCache::addHint(J9Method * method, TR_SharedCacheHint theHint)
       if (scHints.flags == 0) // If no prior hints exist, we can perform a "storeAttachedData" operation
          {
          uint32_t bytesToPersist = 0;
- 
+
          if (!SCfull)
             {
             scHints.flags |= newHint;
             if (isFailedValidationHint)
-               scHints.data = 10 * _initialHintSCount;
+               scHints.data = FAILED_VALIDATION_SCOUNT_SCALE_FACTOR * _initialHintSCount;
 
             J9SharedDataDescriptor descriptor;
             descriptor.address = (U_8 *)&scHints;
@@ -338,15 +342,15 @@ TR_J9SharedCache::addHint(J9Method * method, TR_SharedCacheHint theHint)
             updateHint = true;
             scHints.flags |= newHint;
             if (isFailedValidationHint)
-               scHints.data = 10 * _initialHintSCount;
+               scHints.data = FAILED_VALIDATION_SCOUNT_SCALE_FACTOR * _initialHintSCount;
             }
-         else 
+         else
             {
             // hint already exists, but maybe we need to update the count
             if (isFailedValidationHint)
                {
                uint16_t oldCount = scHints.data;
-               uint16_t newCount = std::min(oldCount * 10, TR_DEFAULT_INITIAL_COUNT);
+               uint16_t newCount = std::min(oldCount * FAILED_VALIDATION_HINTCOUNT_SCALE_FACTOR, TR_DEFAULT_INITIAL_COUNT);
                if (newCount != oldCount)
                   {
                   updateHint = true;
