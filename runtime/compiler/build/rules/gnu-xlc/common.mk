@@ -1,4 +1,4 @@
-# Copyright (c) 2000, 2019 IBM Corp. and others
+# Copyright (c) 2000, 2020 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
 # the terms of the Eclipse Public License 2.0 which accompanies this
@@ -43,6 +43,11 @@ jit: $(JIT_PRODUCT_SONAME)
 
 $(JIT_PRODUCT_SONAME): $(JIT_PRODUCT_OBJECTS) | jit_createdirs
 	$(SOLINK_CMD) $(SOLINK_FLAGS) $(patsubst %,-L%,$(SOLINK_LIBPATH)) -o $@ $(SOLINK_PRE_OBJECTS) $(JIT_PRODUCT_OBJECTS) $(SOLINK_POST_OBJECTS) -Wl,--start-group $(patsubst %,-l%,$(SOLINK_SLINK)) -Wl,--end-group $(SOLINK_EXTRA_ARGS)
+ifeq ($(BUILD_CONFIG),prod)
+	$(OBJCOPY) --only-keep-debug $@ $@$(DBGSUFF)
+	$(OBJCOPY) --strip-debug $@
+	$(OBJCOPY) --add-gnu-debuglink=$@$(DBGSUFF) $@
+endif
 
 JIT_DIR_LIST+=$(dir $(JIT_PRODUCT_SONAME))
 

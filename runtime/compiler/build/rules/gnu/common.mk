@@ -48,6 +48,15 @@ jit: $(JIT_PRODUCT_SONAME)
 
 $(JIT_PRODUCT_SONAME): $(JIT_PRODUCT_OBJECTS) | jit_createdirs
 	$(SOLINK_CMD) -shared $(SOLINK_FLAGS) $(patsubst %,-L%,$(SOLINK_LIBPATH)) -o $@ $(SOLINK_PRE_OBJECTS) $(JIT_PRODUCT_OBJECTS) $(SOLINK_POST_OBJECTS) $(LINK_GROUP_START) $(patsubst %,-l%,$(SOLINK_SLINK)) $(SOLINK_SLINK_STATIC) $(LINK_GROUP_END) $(SOLINK_EXTRA_ARGS)
+ifeq ($(BUILD_CONFIG),prod)
+ifneq ($(OBJCOPY),)
+	$(OBJCOPY) --only-keep-debug $@ $@$(DBGSUFF)
+	$(OBJCOPY) --strip-debug $@
+	$(OBJCOPY) --add-gnu-debuglink=$@$(DBGSUFF) $@
+else ifneq ($(DSYMUTIL),)
+	$(DSYMUTIL) -o $@$(DBGSUFF) $@
+endif
+endif
 
 JIT_DIR_LIST+=$(dir $(JIT_PRODUCT_SONAME))
 

@@ -36,6 +36,11 @@ endif
 EXESUFF=
 LIBPREFIX=lib
 DEPSUFF=.depend.mk
+ifeq ($(OS),osx)
+DBGSUFF=.dSYM
+else
+DBGSUFF=.dbg
+endif
 
 #
 # Paths for default programs on the platform
@@ -49,6 +54,11 @@ DEPSUFF=.depend.mk
 M4?=m4
 SED?=sed
 PERL?=perl
+ifeq ($(OS),osx)
+DSYMUTIL?=dsymutil
+else
+OBJCOPY?=objcopy
+endif
 
 #
 # z/Architecture arch and tune level
@@ -422,7 +432,7 @@ endif # HOST_ARCH == aarch64
 SOLINK_CMD?=$(CXX)
 
 SOLINK_FLAGS+=
-SOLINK_FLAGS_PROD+=-Wl,-S
+SOLINK_FLAGS_PROD+=
 
 SOLINK_LIBPATH+=$(PRODUCT_LIBPATH)
 SOLINK_SLINK+=$(PRODUCT_SLINK) j9thr$(J9_VERSION) j9hookable$(J9_VERSION)
