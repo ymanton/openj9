@@ -43,6 +43,12 @@ jit: $(JIT_PRODUCT_SONAME)
 
 $(JIT_PRODUCT_SONAME): $(JIT_PRODUCT_OBJECTS) | jit_createdirs
 	$(SOLINK_CMD) $(SOLINK_FLAGS) $(patsubst %,-L%,$(SOLINK_LIBPATH)) -o $@ $(SOLINK_PRE_OBJECTS) $(JIT_PRODUCT_OBJECTS) $(SOLINK_POST_OBJECTS) $(patsubst %,-l%,$(SOLINK_SLINK)) $(SOLINK_EXTRA_ARGS)
+ifeq ($(BUILD_CONFIG),prod)
+	mv $@.stab $@$(DBGSUFF)
+	ls -l $@
+	$(STRIP) -X32_64 -t $@
+	ls -l $@
+endif
 
 JIT_DIR_LIST+=$(dir $(JIT_PRODUCT_SONAME))
 

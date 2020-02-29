@@ -32,6 +32,7 @@ SOSUFF=.so
 EXESUFF=
 LIBPREFIX=lib
 DEPSUFF=.depend.mk
+DBGSUFF=.dbg
 
 #
 # Paths for default programs on the platform
@@ -51,9 +52,10 @@ endif
 SED?=sed
 PERL?=perl
 SHAREDLIB?=makeC++SharedLib_r
+STRIP?=strip
 
 #
-# First setup C and C++ compilers. 
+# First setup C and C++ compilers.
 #
 #     Note: "CX" means both C and C++
 #
@@ -83,7 +85,7 @@ CX_FLAGS_DEBUG+=-g -qfullpath
 CX_DEFAULTOPT=-O3
 CX_OPTFLAG?=$(CX_DEFAULTOPT)
 CX_FLAGS_PROD+=$(CX_OPTFLAG)
-    
+
 ifdef ENABLE_SIMD_LIB
     CX_DEFINES+=ENABLE_SPMD_SIMD
     CX_ARCH?=pwr7
@@ -184,7 +186,7 @@ endif
 ifeq ($(BUILD_CONFIG),prod)
     SPP_FLAGS+=$(SPP_FLAGS_PROD)
 endif
-    
+
 SPP_FLAGS+=$(SPP_FLAGS_EXTRA)
 
 # Now setup IPP
@@ -204,6 +206,10 @@ IPP_FLAGS+=$(IPP_FLAGS_EXTRA)
 # Finally setup the linker
 #
 SOLINK_CMD?=$(SHAREDLIB)
+
+SOLINK_STRIP=-bstabsplit
+
+SOLINK_FLAGS_PROD+=$(SOLINK_STRIP)
 
 SOLINK_FLAGS+=-p0 -bloadmap:lmap -brtl -bnoentry -bnolibpath
 
