@@ -348,6 +348,7 @@ Java_org_eclipse_openj9_criu_CRIUSupport_checkpointJVMImpl(JNIEnv *env,
 
 		criu_set_images_dir_fd(dirFD);
 		criu_set_shell_job(JNI_FALSE != shellJob);
+		criu_set_unprivileged(TRUE);
 		if (logLevel > 0) {
 			criu_set_log_level((int)logLevel);
 		}
