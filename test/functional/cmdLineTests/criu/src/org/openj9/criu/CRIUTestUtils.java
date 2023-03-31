@@ -74,7 +74,7 @@ public class CRIUTestUtils {
 					criu = new CRIUSupport(path);
 				}
 				showThreadCurrentTime("Performing CRIUSupport.checkpointJVM()");
-				criu.setLeaveRunning(false).setShellJob(true).setFileLocks(true).checkpointJVM();
+				criu.setLeaveRunning(false).setShellJob(true).setFileLocks(true).setUnprivileged(true).checkpointJVM();
 			} catch (SystemRestoreException e) {
 				e.printStackTrace();
 			}
