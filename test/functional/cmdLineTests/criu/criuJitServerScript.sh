@@ -38,6 +38,8 @@ export CRIU_CONFIG_FILE="$1/criu.conf"
 echo "TEST_ROOT=$1"
 echo "CRIU_CONFIG_FILE=$CRIU_CONFIG_FILE"
 ls -l "$CRIU_CONFIG_FILE"
+which criu
+getcap `which criu`
 
 TEST_ROOT=$1
 TEST_JDK_BIN=$2
