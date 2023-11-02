@@ -35,6 +35,10 @@ echo "start running script";
 
 export CRIU_CONFIG_FILE="$1/criu.conf"
 
+echo "TEST_ROOT=$1"
+echo "CRIU_CONFIG_FILE=$CRIU_CONFIG_FILE"
+ls -l "$CRIU_CONFIG_FILE"
+
 TEST_ROOT=$1
 TEST_JDK_BIN=$2
 JVM_OPTIONS="$3"

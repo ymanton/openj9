@@ -35,6 +35,10 @@ echo "start running script";
 
 export CRIU_CONFIG_FILE="$1/criu.conf"
 
+echo "TEST_ROOT=$1"
+echo "CRIU_CONFIG_FILE=$CRIU_CONFIG_FILE"
+ls -l "$CRIU_CONFIG_FILE"
+
 echo "export GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load";
 export GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load
 echo "export LD_BIND_NOT=on";
