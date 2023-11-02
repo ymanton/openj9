@@ -40,6 +40,7 @@ echo "CRIU_CONFIG_FILE=$CRIU_CONFIG_FILE"
 ls -l "$CRIU_CONFIG_FILE"
 which criu
 getcap `which criu`
+criu --version
 
 echo "export GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load";
 export GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load

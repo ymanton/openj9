@@ -29,6 +29,7 @@ echo "CRIU_CONFIG_FILE=$CRIU_CONFIG_FILE"
 ls -l "$CRIU_CONFIG_FILE"
 which criu
 getcap `which criu`
+criu --version
 
 echo "start running script"
 # the expected arguments are:
