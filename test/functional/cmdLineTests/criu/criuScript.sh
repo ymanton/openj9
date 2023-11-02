@@ -33,6 +33,8 @@ echo "start running script";
 # $7 is the KEEP_CHECKPOINT
 # $8 is the KEEP_TEST_OUTPUT
 
+export CRIU_CONFIG_FILE="$1/criu.conf"
+
 echo "export GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load";
 export GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.cpu.hwcaps=-XSAVEC,-XSAVE,-AVX2,-ERMS,-AVX,-AVX_Fast_Unaligned_Load
 echo "export LD_BIND_NOT=on";

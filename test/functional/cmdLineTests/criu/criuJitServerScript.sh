@@ -33,6 +33,8 @@ echo "start running script";
 # $7 is the KEEP_CHECKPOINT
 # $8 is the KEEP_TEST_OUTPUT
 
+export CRIU_CONFIG_FILE="$1/criu.conf"
+
 TEST_ROOT=$1
 TEST_JDK_BIN=$2
 JVM_OPTIONS="$3"
