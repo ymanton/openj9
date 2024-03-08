@@ -986,3 +986,5 @@ TraceException=Trc_VM_jfr_ErrorWritingChunk Overhead=1 Level=1 Template="Error w
 TraceEvent=Trc_VM_VMInitStages_isDebugOnRestoreEnabled NoEnv Overhead=1 Level=3 Template="VMInitStages(ABOUT_TO_BOOTSTRAP) isDebugOnRestoreEnabled returns TRUE"
 TraceEvent=Trc_VM_hookAboutToBootstrapEvent_debugModeRequested Overhead=1 Level=3 Template="hookAboutToBootstrapEvent() debugModeRequested is TRUE"
 TraceEvent=Trc_VM_mustReportEnterStepOrBreakpoint_hookedOrReserved NoEnv Overhead=1 Level=5 Template="mustReportEnterStepOrBreakpoint() hookedOrReserved(%zu)"
+
+TraceEvent=Trc_VM_criu_disclaimAllClassMemory_segment Overhead=1 Level=5 Template="disclaimAllClassMemory segment (%p): baseAddress=%p, heapBase=%p, size=%u, type=%x"
