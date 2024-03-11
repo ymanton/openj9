@@ -78,7 +78,7 @@ if [ "$JITSERVER_EXISTS" == 0 ]; then
     if [ "$KEEP_CHECKPOINT" != true ]; then
         for ((i=0; i<$NUM_CHECKPOINT; i++)); do
             sleep 2;
-            criu restore -D ./cpData --shell-job >criuOutput 2>&1;
+            criu restore -D ./cpData -v4 --shell-job >criuOutput 2>&1;
         done
     fi
 

@@ -36,7 +36,7 @@ fi
 if [ "$4" = "FirstRestore" ] || [ "$4" = "SecondRestore" ]
 then
     sleep 2
-    criu restore -D cpData --shell-job
+    criu restore -D cpData -v4 --shell-job
 fi
 cat testOutput
 if [ "$4" = "SecondRestore" ]

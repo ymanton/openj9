@@ -45,7 +45,7 @@ if [ "$7" != true ]; then
     for ((i=0; i<$NUM_CHECKPOINT; i++)); do
         sleep 2;
         echo "initiate restore" >>criuOutput
-        criu restore -D ./cpData -v2 --shell-job >>criuOutput 2>&1;
+        criu restore -D ./cpData -v4 --shell-job >>criuOutput 2>&1;
     done
 fi
 
