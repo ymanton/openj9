@@ -1208,6 +1208,8 @@ public:
     */
    TR::Node * testAreSomeClassFlagsSet(TR::Node *j9ClassRefNode, uint32_t flagsToTest);
 
+   TR::Node * testAreSomeClassAndDepthFlagsSet(TR::Node *j9ClassRefNode, uint32_t flagsToTest);
+
    /**
     * \brief Load class flags field of the specified class and test whether the value type
     *        flag is set.
@@ -1225,6 +1227,8 @@ public:
     *         or zero otherwise
     */
    TR::Node * testIsClassPrimitiveValueType(TR::Node *j9ClassRefNode);
+
+   TR::Node * loadArrayClassComponentType(TR::Node *j9ClassRefNode);
 
    /**
     * \brief Test whether any of the specified flags is set on the array's component class

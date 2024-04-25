@@ -2849,6 +2849,28 @@ TR_J9VMBase::testAreSomeClassFlagsSet(TR::Node *j9ClassRefNode, uint32_t flagsTo
    }
 
 TR::Node *
+TR_J9VMBase::testAreSomeClassAndDepthFlagsSet(TR::Node *j9ClassRefNode, uint32_t flagsToTest)
+   {
+   TR::SymbolReference *classAndDepthFlagsSymRef = TR::comp()->getSymRefTab()->findOrCreateClassAndDepthFlagsSymbolRef();
+   TR::Node *classFlags = NULL;
+
+   if (TR::comp()->target().is32Bit())
+      {
+      classFlags = TR::Node::createWithSymRef(TR::iloadi, 1, 1, j9ClassRefNode, classAndDepthFlagsSymRef);
+      }
+   else
+      {
+      classFlags = TR::Node::createWithSymRef(TR::lloadi, 1, 1, j9ClassRefNode, classAndDepthFlagsSymRef);
+      classFlags = TR::Node::create(TR::l2i, 1, classFlags);
+      }
+
+   TR::Node *maskedFlags = TR::Node::create(TR::iand, 2, classFlags, TR::Node::iconst(j9ClassRefNode, flagsToTest));
+
+   return maskedFlags;
+   }
+
+
+TR::Node *
 TR_J9VMBase::testIsClassValueType(TR::Node *j9ClassRefNode)
    {
    return testAreSomeClassFlagsSet(j9ClassRefNode, J9ClassIsValueType);
@@ -2861,13 +2883,21 @@ TR_J9VMBase::testIsClassPrimitiveValueType(TR::Node *j9ClassRefNode)
    }
 
 TR::Node *
+TR_J9VMBase::loadArrayClassComponentType(TR::Node *j9ClassRefNode)
+   {
+   TR::SymbolReference *arrayCompSymRef = TR::comp()->getSymRefTab()->findOrCreateArrayComponentTypeSymbolRef();
+   TR::Node *arrayCompClass = TR::Node::createWithSymRef(TR::aloadi, 1, 1, j9ClassRefNode, arrayCompSymRef);
+
+   return arrayCompClass;
+   }
+
+TR::Node *
 TR_J9VMBase::checkSomeArrayCompClassFlags(TR::Node *arrayBaseAddressNode, TR::ILOpCodes ifCmpOp, uint32_t flagsToTest)
    {
    TR::SymbolReference *vftSymRef = TR::comp()->getSymRefTab()->findOrCreateVftSymbolRef();
-   TR::SymbolReference *arrayCompSymRef = TR::comp()->getSymRefTab()->findOrCreateArrayComponentTypeSymbolRef();
-
    TR::Node *vft = TR::Node::createWithSymRef(TR::aloadi, 1, 1, arrayBaseAddressNode, vftSymRef);
-   TR::Node *arrayCompClass = TR::Node::createWithSymRef(TR::aloadi, 1, 1, vft, arrayCompSymRef);
+
+   TR::Node *arrayCompClass = loadArrayClassComponentType(vft);
    TR::Node *maskedFlagsNode = testAreSomeClassFlagsSet(arrayCompClass, flagsToTest);
    TR::Node *ifNode = TR::Node::createif(ifCmpOp, maskedFlagsNode, TR::Node::iconst(arrayBaseAddressNode, 0));
 
@@ -7529,6 +7559,7 @@ TR_J9VM::inlineNativeCall(TR::Compilation * comp, TR::TreeTop * callNodeTreeTop,
          TR::Node::recreate(callNode, TR::aloadi);
          callNode->setSymbolReference(comp->getSymRefTab()->findOrCreateVftSymbolRef());
          callNode = TR::Node::createWithSymRef(TR::aloadi, 1, 1, callNode, comp->getSymRefTab()->findOrCreateJavaLangClassFromClassSymbolRef());
+         callNode->setIsNonNull(true);
          return callNode;
 
       // Note: these cases are not tested and thus are commented out:
