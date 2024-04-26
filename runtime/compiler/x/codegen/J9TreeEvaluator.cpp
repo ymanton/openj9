@@ -6646,13 +6646,14 @@ static void genHeapAlloc2(
       // MERGED PATH
       // -----------
 
+      cg->generateDebugCounter("inlinealloc");
       generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
                                 node,
                                 segmentReg,
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapTop), cg), cg);
 
       generateLabelInstruction(TR::InstOpCode::JA4, node, failLabel, cg);
-
+      cg->generateDebugCounter("inlinealloc:success");
       // ------------
       // 1st PREFETCH
       // ------------
