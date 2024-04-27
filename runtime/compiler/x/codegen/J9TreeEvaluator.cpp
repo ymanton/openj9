@@ -6445,7 +6445,7 @@ static void genHeapAlloc2(
    TR::Register *vmThreadReg = cg->getVMThreadRegister();
    bool generateArraylets = comp->generateArraylets();
    bool isTooSmallToPrefetch = false;
-
+   cg->generateDebugCounter("inlinealloc");
       {
       bool shouldAlignToCacheBoundary = false;
 
@@ -6646,14 +6646,14 @@ static void genHeapAlloc2(
       // MERGED PATH
       // -----------
 
-      cg->generateDebugCounter("inlinealloc");
+      cg->generateDebugCounter("inlinealloc-safetoalloc");
       generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
                                 node,
                                 segmentReg,
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapTop), cg), cg);
 
       generateLabelInstruction(TR::InstOpCode::JA4, node, failLabel, cg);
-      cg->generateDebugCounter("inlinealloc:success");
+      cg->generateDebugCounter("inlinealloc-safetoalloc-success");
       // ------------
       // 1st PREFETCH
       // ------------
