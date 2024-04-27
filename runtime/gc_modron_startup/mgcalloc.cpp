@@ -221,9 +221,11 @@ traceAllocateIndexableObject(J9VMThread *vmThread, J9Class* clazz, uintptr_t obj
 
 	utf = J9ROMCLASS_CLASSNAME(arrayClass->leafComponentType->romClass);
 
+	MM_EnvironmentBase *env = MM_EnvironmentBase::getEnvironment(vmThread->omrVMThread);
+	MM_GCExtensions *extensions = MM_GCExtensions::getExtensions(env);
 	UDATA tlhSpaceUsed = vmThread->heapAlloc - vmThread->allocateThreadLocalHeap.heapBase - objSize;
 	UDATA tlhSpaceTotal = vmThread->heapTop - vmThread->allocateThreadLocalHeap.heapBase;
-	Trc_MM_J9AllocateIndexableObject_outOfLineObjectAllocation(vmThread, clazz, J9UTF8_LENGTH(utf), J9UTF8_DATA(utf), arity*2, brackets, objSize, numberOfIndexedFields, tlhSpaceUsed, tlhSpaceTotal, vmThread->allocateThreadLocalHeap.realHeapTop);
+	Trc_MM_J9AllocateIndexableObject_outOfLineObjectAllocation(vmThread, clazz, J9UTF8_LENGTH(utf), J9UTF8_DATA(utf), arity*2, brackets, objSize, numberOfIndexedFields, tlhSpaceUsed, tlhSpaceTotal, extensions->needDisableInlineAllocation());
 	return;
 }
 
@@ -245,7 +247,7 @@ traceAllocateObject(J9VMThread *vmThread, J9Object * object, J9Class* clazz, uin
 			UDATA tlhSpaceUsed = vmThread->heapAlloc - vmThread->allocateThreadLocalHeap.heapBase - objSize;
 			UDATA tlhSpaceTotal = vmThread->heapTop - vmThread->allocateThreadLocalHeap.heapBase;
 			Trc_MM_J9AllocateObject_outOfLineObjectAllocation(
-				vmThread, clazz, J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(romClass)), J9UTF8_DATA(J9ROMCLASS_CLASSNAME(romClass)), objSize, tlhSpaceUsed, tlhSpaceTotal, vmThread->allocateThreadLocalHeap.realHeapTop);
+				vmThread, clazz, J9UTF8_LENGTH(J9ROMCLASS_CLASSNAME(romClass)), J9UTF8_DATA(J9ROMCLASS_CLASSNAME(romClass)), objSize, tlhSpaceUsed, tlhSpaceTotal, extensions->needDisableInlineAllocation());
 		}
 
 		/* Keep the remainder, want this to happen so that we don't miss objects
