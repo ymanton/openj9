@@ -6477,7 +6477,7 @@ static void genHeapAlloc2(
             }
          else
             {
-            generateRegImmInstruction(TR::InstOpCode::CMPRegImm4(), node, sizeReg, (int32_t)maxObjectSizeInElements, cg);
+            generateRegImmInstruction(TR::InstOpCode::CMP4RegImm4, node, sizeReg, (int32_t)maxObjectSizeInElements, cg);
             }
 
          // Must be an unsigned comparison on sizes.
@@ -6498,22 +6498,22 @@ static void genHeapAlloc2(
 
          if (!generateArraylets)
             {
-//            TR_ASSERT(allocationSizeOrDataOffset % fej9->getObjectAlignmentInBytes() == 0, "Array header size of %d is not a multiple of %d", allocationSizeOrDataOffset, fej9->getObjectAlignmentInBytes());
+            ; //TR_ASSERT(allocationSizeOrDataOffset % fej9->getObjectAlignmentInBytes() == 0, "Array header size of %d is not a multiple of %d", allocationSizeOrDataOffset, fej9->getObjectAlignmentInBytes());
             }
 
          round = (elementSize >= TR::Compiler->om.getObjectAlignmentInBytes())? 0 : TR::Compiler->om.getObjectAlignmentInBytes();
          int32_t disp32 = round ? (round-1) : 0;
 
-/*
-   mov rcx, rdx               ; # of array elements                  (1)
-   cmp rcx, 1                                                        (1)
-   adc rcx, 0                 ; adjust for zero length               (1)
+         /*
+            mov rcx, rdx               ; # of array elements                  (1)
+            cmp rcx, 1                                                        (1)
+            adc rcx, 0                 ; adjust for zero length               (1)
 
-   shl rcx, 2                                                        (1)
-   add rcx, 0xf               ; rcx + header (8) + 7                 (1)
+            shl rcx, 2                                                        (1)
+            add rcx, 0xf               ; rcx + header (8) + 7                 (1)
 
-   and rcx,0xfffffffffffffff8 ; round down                           (1)
-*/
+            and rcx,0xfffffffffffffff8 ; round down                           (1)
+         */
 
          generateRegRegInstruction(TR::InstOpCode::MOV4RegReg, node, segmentReg, sizeReg, cg);
 
@@ -6646,14 +6646,13 @@ static void genHeapAlloc2(
       // MERGED PATH
       // -----------
 
-      cg->generateDebugCounter("inlinealloc-safetoalloc");
       generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
                                 node,
                                 segmentReg,
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapTop), cg), cg);
 
       generateLabelInstruction(TR::InstOpCode::JA4, node, failLabel, cg);
-      cg->generateDebugCounter("inlinealloc-safetoalloc-success");
+      cg->generateDebugCounter("inlinealloc:success");
       // ------------
       // 1st PREFETCH
       // ------------
