@@ -5960,15 +5960,15 @@ static void genHeapAlloc(
       bool shouldAlignToCacheBoundary = false;
       bool isSmallAllocation = false;
 
-      size_t heapAlloc_offset=offsetof(J9VMThread, heapAlloc);
-      size_t heapTop_offset=offsetof(J9VMThread, heapTop);
-      size_t tlhPrefetchFTA_offset= offsetof(J9VMThread, tlhPrefetchFTA);
+      size_t heapAlloc_offset = offsetof(J9VMThread, heapAlloc);
+      size_t heapTop_offset = offsetof(J9VMThread, heapTop);
+      size_t tlhPrefetchFTA_offset = offsetof(J9VMThread, tlhPrefetchFTA);
 #ifdef J9VM_GC_NON_ZERO_TLH
       if (!comp->getOption(TR_DisableDualTLH) && node->canSkipZeroInitialization())
          {
-         heapAlloc_offset=offsetof(J9VMThread, nonZeroHeapAlloc);
-         heapTop_offset=offsetof(J9VMThread, nonZeroHeapTop);
-         tlhPrefetchFTA_offset= offsetof(J9VMThread, nonZeroTlhPrefetchFTA);
+         heapAlloc_offset = offsetof(J9VMThread, nonZeroHeapAlloc);
+         heapTop_offset = offsetof(J9VMThread, nonZeroHeapTop);
+         tlhPrefetchFTA_offset = offsetof(J9VMThread, nonZeroTlhPrefetchFTA);
          }
 #endif
       // Load the base of the next available heap storage.  This load is done speculatively on the assumption that the
@@ -7556,6 +7556,9 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    if (comp->suppressAllocationInlining())
       return NULL;
 
+   if (comp->getOption(TR_DisableAllocationInlining))
+      return NULL;
+
    // If the helper does not preserve all the registers there will not be
    // enough registers to do the inline allocation.
    // Also, don't do the inline allocation if optimizing for space
@@ -7575,11 +7578,10 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    bool realTimeGC = comp->getOptions()->realTimeGC();
    bool generateArraylets = comp->generateArraylets();
 
-   TR::Register *segmentReg      = NULL;
-   TR::Register *tempReg         = NULL;
-   TR::Register *targetReg       = NULL;
-   TR::Register *sizeReg         = NULL;
-
+   TR::Register *segmentReg = NULL;
+   TR::Register *tempReg    = NULL;
+   TR::Register *targetReg  = NULL;
+   TR::Register *sizeReg    = NULL;
 
    /**
     * Study of registers used in inline allocation.
@@ -7604,7 +7606,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
     *
     */
 
-   TR::RegisterDependencyConditions  *deps;
+   TR::RegisterDependencyConditions *deps;
 
    // --------------------------------------------------------------------------------
    //
@@ -7620,11 +7622,15 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    objectSize = comp->canAllocateInline(node, clazz);
    if (objectSize < 0)
       return NULL;
+
    // Currently dynamic allocation is only supported on reference array.
    // We are performing dynamic array allocation if both object size and
    // class block cannot be statically determined.
-   bool dynamicArrayAllocation = (node->getOpCodeValue() == TR::anewarray)
-         && (objectSize == 0) && (clazz == NULL);
+   bool dynamicArrayAllocation =
+      (node->getOpCodeValue() == TR::anewarray) &&
+      (objectSize == 0) &&
+      (clazz == NULL);
+
    allocationSize = objectSize;
 
    static long count = 0;
@@ -7633,11 +7639,8 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
 
    if (node->getOpCodeValue() == TR::New)
       {
-      if (comp->getOption(TR_DisableAllocationInlining))
-         return 0;
-
       // realtimeGC: cannot inline if object size is too big to get a size class
-      if (comp->getOptions()->realTimeGC())
+      if (realTimeGC)
          {
          if ((uint32_t) objectSize > fej9->getMaxObjectSizeForSizeClass())
             return NULL;
@@ -7666,24 +7669,18 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
       {
       if (node->getOpCodeValue() == TR::newarray)
          {
-         if (comp->getOption(TR_DisableAllocationInlining))
-            return 0;
-
          elementSize = TR::Compiler->om.getSizeOfArrayElement(node);
          }
       else
          {
          // Must be TR::anewarray
          //
-         if (comp->getOption(TR_DisableAllocationInlining))
-            return 0;
-
-         if (comp->useCompressedPointers())
-            elementSize = TR::Compiler->om.sizeofReferenceField();
-         else
-            elementSize = (int32_t)TR::Compiler->om.sizeofReferenceAddress();
+         elementSize = comp->useCompressedPointers() ?
+            TR::Compiler->om.sizeofReferenceField() :
+            (int32_t)TR::Compiler->om.sizeofReferenceAddress();
 
          classReg = node->getSecondChild()->getRegister();
+
          // For dynamic array allocation, need to evaluate second child
          if (!classReg && dynamicArrayAllocation)
             classReg = cg->evaluate(node->getSecondChild());
@@ -7691,14 +7688,9 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
 
       isArrayNew = true;
 
-      if (generateArraylets)
-         {
-         dataOffset = fej9->getArrayletFirstElementOffset(elementSize, comp);
-         }
-      else
-         {
-         dataOffset = TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
-         }
+      dataOffset = generateArraylets ?
+         fej9->getArrayletFirstElementOffset(elementSize, comp) :
+         TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
       }
 
    TR::LabelSymbol *startLabel = generateLabelSymbol(cg);
@@ -7712,7 +7704,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    // If we can skip zero init, and it is not outlined new, we use the new TLH
    // same logic also appears later, but we need to do this before generate the helper call
    //
-   if (node->canSkipZeroInitialization() && (enableTLHBatchClearing || !comp->getOption(TR_DisableDualTLH)) && !comp->getOptions()->realTimeGC())
+   if (node->canSkipZeroInitialization() && (enableTLHBatchClearing || !comp->getOption(TR_DisableDualTLH)) && !realTimeGC)
       {
       // For value types, it should use jitNewValue helper call which is set up before code gen
       if ((node->getOpCodeValue() == TR::New)
@@ -7720,6 +7712,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
          node->setSymbolReference(comp->getSymRefTab()->findOrCreateNewObjectNoZeroInitSymbolRef(comp->getMethodSymbol()));
       else if (node->getOpCodeValue() == TR::newarray)
          node->setSymbolReference(comp->getSymRefTab()->findOrCreateNewArrayNoZeroInitSymbolRef(comp->getMethodSymbol()));
+
       if (comp->getOption(TR_TraceCG))
          traceMsg(comp, "SKIPZEROINIT: for %p, change the symbol to %p ", node, node->getSymbolReference());
       }
@@ -7732,7 +7725,6 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    TR::LabelSymbol *failLabel = generateLabelSymbol(cg);
 
    segmentReg = cg->allocateRegister();
-
    tempReg = cg->allocateRegister();
 
    // If the size is variable, evaluate it into a register
@@ -7768,27 +7760,20 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    //
    // --------------------------------------------------------------------------------
 
-   bool canUseFastInlineAllocation =
-      (!comp->getOptions()->realTimeGC() &&
-       !comp->generateArraylets()) ? true : false;
+   bool canUseFastInlineAllocation = (!realTimeGC && !generateArraylets) ? true : false;
 
    bool useRepInstruction;
    bool monitorSlotIsInitialized;
    bool skipOutlineZeroInit = false;
    TR_ExtraInfoForNew *initInfo = node->getSymbolReference()->getExtraInfo();
+
    if (node->canSkipZeroInitialization())
       {
       skipOutlineZeroInit = true;
       }
    else if (initInfo)
       {
-      if (node->canSkipZeroInitialization())
-         {
-         initInfo->zeroInitSlots = NULL;
-         initInfo->numZeroInitSlots = 0;
-         skipOutlineZeroInit = true;
-         }
-      else if (initInfo->numZeroInitSlots <= 0)
+      if (initInfo->numZeroInitSlots <= 0)
          {
          skipOutlineZeroInit = true;
          }
@@ -7821,7 +7806,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    bool shouldInitZeroSizedArrayHeader = true;
 
 #ifdef J9VM_GC_NON_ZERO_TLH
-   if (!enableTLHBatchClearing || comp->getOptions()->realTimeGC())
+   if (!enableTLHBatchClearing || realTimeGC)
       {
 #endif
       if (!maxZeroInitWordsPerIteration)
@@ -7888,44 +7873,55 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
                   }
                else if (span > 3)
                   {
+                  TR::InstOpCode::Mnemonic storeOpCode;
                   if (lastSpan == 0)
                      {
-                     generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
+                     storeOpCode = TR::InstOpCode::MOVDMemReg;
                      }
                   else if (lastSpan == 1)
                      {
-                     generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node,generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
+                     storeOpCode = TR::InstOpCode::MOVQMemReg;
                      }
                   else
                      {
-                     generateMemRegInstruction(TR::InstOpCode::MOVDQUMemReg, node, generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
+                     storeOpCode = TR::InstOpCode::MOVDQUMemReg;
                      }
+
+                  generateMemRegInstruction(storeOpCode, node, generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
+
                   lastElementIndex = nextE;
                   lastSpan = 0;
                   }
                }
-            if (lastSpan == 0)
+
+            if (lastSpan < 3)
                {
-               generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
-               }
-            else if (lastSpan == 1)
-               {
-               generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node,generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset, cg), scratchReg, cg);
-               }
-            else if (lastSpan == 2)
-               {
-               TR_ASSERT(dataOffset >= 4, "dataOffset must be >= 4.");
-               generateMemRegInstruction(TR::InstOpCode::MOVDQUMemReg, node, generateX86MemoryReference(targetReg, lastElementIndex*4 +dataOffset - 4, cg), scratchReg, cg);
+               int32_t adjustedDataOffset = dataOffset;
+
+               TR::InstOpCode::Mnemonic storeOpCode;
+               if (lastSpan == 0)
+                  {
+                  storeOpCode = TR::InstOpCode::MOVDMemReg;
+                  }
+               else if (lastSpan == 1)
+                  {
+                  storeOpCode = TR::InstOpCode::MOVQMemReg;
+                  }
+               else if (lastSpan == 2)
+                  {
+                  TR_ASSERT(dataOffset >= 4, "dataOffset must be >= 4.");
+                  storeOpCode = TR::InstOpCode::MOVDQUMemReg;
+                  adjustedDataOffset -= 4;
+                  }
+
+               generateMemRegInstruction(storeOpCode, node, generateX86MemoryReference(targetReg, lastElementIndex*4 + adjustedDataOffset, cg), scratchReg, cg);
                }
             }
 
          useRepInstruction = false;
 
          J9JavaVM * jvm = fej9->getJ9JITConfig()->javaVM;
-         if (jvm->lockwordMode == LOCKNURSERY_ALGORITHM_ALL_INHERIT)
-            monitorSlotIsInitialized = false;
-         else
-            monitorSlotIsInitialized = true;
+         monitorSlotIsInitialized = (jvm->lockwordMode != LOCKNURSERY_ALGORITHM_ALL_INHERIT);
          }
       else if ((!initInfo || initInfo->numZeroInitSlots > 0) &&
                !node->canSkipZeroInitialization())
@@ -7943,10 +7939,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
             }
 
          J9JavaVM * jvm = fej9->getJ9JITConfig()->javaVM;
-         if (jvm->lockwordMode == LOCKNURSERY_ALGORITHM_ALL_INHERIT)
-            monitorSlotIsInitialized = false;
-         else
-            monitorSlotIsInitialized = true;
+         monitorSlotIsInitialized = (jvm->lockwordMode != LOCKNURSERY_ALGORITHM_ALL_INHERIT);
          }
       else
          {
@@ -8094,8 +8087,8 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
       }
 #endif /* TR_TARGET_64BIT */
 
-   if (fej9->inlinedAllocationsMustBeVerified() && (node->getOpCodeValue() == TR::New ||
-                                                        node->getOpCodeValue() == TR::anewarray) )
+   if (fej9->inlinedAllocationsMustBeVerified() &&
+       (node->getOpCodeValue() == TR::New || node->getOpCodeValue() == TR::anewarray))
       {
       startInstr = startInstr->getNext();
       TR_OpaqueClassBlock *classToValidate = clazz;
