@@ -5756,6 +5756,8 @@ static void genHeapAlloc(
 
    TR_J9VMBase *fej9 = (TR_J9VMBase *)(cg->fe());
 
+   static char *disableAllocationAlignment = feGetEnv("TR_DisableAllocationAlignment");
+
    if (comp->getOptions()->realTimeGC())
       {
 #if defined(J9VM_GC_REALTIME)
@@ -6182,7 +6184,8 @@ static void genHeapAlloc(
 
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP)
          if ((node->getOpCodeValue() == TR::New) &&
-             (comp->getMethodHotness() >= hot || node->shouldAlignTLHAlloc()))
+             (comp->getMethodHotness() >= hot || node->shouldAlignTLHAlloc()) &&
+             !disableAllocationAlignment)
             {
             TR_OpaqueMethodBlock *ownMethod = node->getOwningMethod();
             TR::Node *classChild = node->getFirstChild();
@@ -6263,6 +6266,8 @@ static void genHeapAlloc(
 
       if (shouldAlignToCacheBoundary)
          {
+         TR_ASSERT_FATAL_WITH_NODE(node, !disableAllocationAlignment, "Allocation alignment is disabled");
+
          // Alignment to a cache line boundary may require inserting more padding than is normally
          // necessary to achieve the alignment.  In those cases, insert GC dark matter to describe
          // the space inserted.
@@ -6446,6 +6451,9 @@ static void genHeapAlloc2(
    bool generateArraylets = comp->generateArraylets();
    bool isTooSmallToPrefetch = false;
    cg->generateDebugCounter("inlinealloc");
+
+   static char *disableAllocationAlignment = feGetEnv("TR_DisableAllocationAlignment");
+
       {
       bool shouldAlignToCacheBoundary = false;
 
@@ -6570,7 +6578,8 @@ static void genHeapAlloc2(
 
 #if defined(J9VM_GC_THREAD_LOCAL_HEAP)
          if ((node->getOpCodeValue() == TR::New) &&
-             (comp->getMethodHotness() >= hot || node->shouldAlignTLHAlloc()))
+             (comp->getMethodHotness() >= hot || node->shouldAlignTLHAlloc()) &&
+             !disableAllocationAlignment)
             {
             TR_OpaqueMethodBlock *ownMethod = node->getOwningMethod();
 
@@ -6641,7 +6650,6 @@ static void genHeapAlloc2(
             }
          }
 
-
       // -----------
       // MERGED PATH
       // -----------
@@ -6658,11 +6666,13 @@ static void genHeapAlloc2(
       // 1st PREFETCH
       // ------------
 
-      if (!isTooSmallToPrefetch)
+      if (!isTooSmallToPrefetch && cg->enableTLHPrefetching())
          generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
 
       if (shouldAlignToCacheBoundary)
          {
+         TR_ASSERT_FATAL_WITH_NODE(node, !disableAllocationAlignment, "Allocation alignment is disabled");
+
          // Alignment to a cache line boundary may require inserting more padding than is normally
          // necessary to achieve the alignment.  In those cases, insert GC dark matter to describe
          // the space inserted.
@@ -6740,7 +6750,7 @@ static void genHeapAlloc2(
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg),
                                 segmentReg, cg);
 
-      if (!isTooSmallToPrefetch && node->getOpCodeValue() != TR::New)
+      if (!isTooSmallToPrefetch && node->getOpCodeValue() != TR::New && cg->enableTLHPrefetching())
          {
          // ------------
          // 2nd PREFETCH
