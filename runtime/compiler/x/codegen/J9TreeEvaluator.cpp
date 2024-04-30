@@ -5960,15 +5960,15 @@ static void genHeapAlloc(
       bool shouldAlignToCacheBoundary = false;
       bool isSmallAllocation = false;
 
-      size_t heapAlloc_offset = offsetof(J9VMThread, heapAlloc);
-      size_t heapTop_offset = offsetof(J9VMThread, heapTop);
-      size_t tlhPrefetchFTA_offset = offsetof(J9VMThread, tlhPrefetchFTA);
+      size_t heapAlloc_offset=offsetof(J9VMThread, heapAlloc);
+      size_t heapTop_offset=offsetof(J9VMThread, heapTop);
+      size_t tlhPrefetchFTA_offset= offsetof(J9VMThread, tlhPrefetchFTA);
 #ifdef J9VM_GC_NON_ZERO_TLH
       if (!comp->getOption(TR_DisableDualTLH) && node->canSkipZeroInitialization())
          {
-         heapAlloc_offset = offsetof(J9VMThread, nonZeroHeapAlloc);
-         heapTop_offset = offsetof(J9VMThread, nonZeroHeapTop);
-         tlhPrefetchFTA_offset = offsetof(J9VMThread, nonZeroTlhPrefetchFTA);
+         heapAlloc_offset=offsetof(J9VMThread, nonZeroHeapAlloc);
+         heapTop_offset=offsetof(J9VMThread, nonZeroHeapTop);
+         tlhPrefetchFTA_offset= offsetof(J9VMThread, nonZeroTlhPrefetchFTA);
          }
 #endif
       // Load the base of the next available heap storage.  This load is done speculatively on the assumption that the
@@ -7620,13 +7620,11 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    objectSize = comp->canAllocateInline(node, clazz);
    if (objectSize < 0)
       return NULL;
-
    // Currently dynamic allocation is only supported on reference array.
    // We are performing dynamic array allocation if both object size and
    // class block cannot be statically determined.
    bool dynamicArrayAllocation = (node->getOpCodeValue() == TR::anewarray)
          && (objectSize == 0) && (clazz == NULL);
-
    allocationSize = objectSize;
 
    static long count = 0;
@@ -7708,13 +7706,11 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    startLabel->setStartInternalControlFlow();
    fallThru->setEndInternalControlFlow();
 
-   static char *enableTLHBatchClearing = feGetEnv("TR_EnableBatchClear");
-
 #ifdef J9VM_GC_NON_ZERO_TLH
    // If we can skip zero init, and it is not outlined new, we use the new TLH
    // same logic also appears later, but we need to do this before generate the helper call
    //
-   if (node->canSkipZeroInitialization() && (enableTLHBatchClearing || !comp->getOption(TR_DisableDualTLH)) && !comp->getOptions()->realTimeGC())
+   if (node->canSkipZeroInitialization() && !comp->getOption(TR_DisableDualTLH) && !comp->getOptions()->realTimeGC())
       {
       // For value types, it should use jitNewValue helper call which is set up before code gen
       if ((node->getOpCodeValue() == TR::New)
@@ -7722,7 +7718,6 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
          node->setSymbolReference(comp->getSymRefTab()->findOrCreateNewObjectNoZeroInitSymbolRef(comp->getMethodSymbol()));
       else if (node->getOpCodeValue() == TR::newarray)
          node->setSymbolReference(comp->getSymRefTab()->findOrCreateNewArrayNoZeroInitSymbolRef(comp->getMethodSymbol()));
-
       if (comp->getOption(TR_TraceCG))
          traceMsg(comp, "SKIPZEROINIT: for %p, change the symbol to %p ", node, node->getSymbolReference());
       }
@@ -7779,14 +7774,19 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    bool monitorSlotIsInitialized;
    bool skipOutlineZeroInit = false;
    TR_ExtraInfoForNew *initInfo = node->getSymbolReference()->getExtraInfo();
-
    if (node->canSkipZeroInitialization())
       {
       skipOutlineZeroInit = true;
       }
    else if (initInfo)
       {
-      if (initInfo->numZeroInitSlots <= 0)
+      if (node->canSkipZeroInitialization())
+         {
+         initInfo->zeroInitSlots = NULL;
+         initInfo->numZeroInitSlots = 0;
+         skipOutlineZeroInit = true;
+         }
+      else if (initInfo->numZeroInitSlots <= 0)
          {
          skipOutlineZeroInit = true;
          }
@@ -7819,7 +7819,7 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
    bool shouldInitZeroSizedArrayHeader = true;
 
 #ifdef J9VM_GC_NON_ZERO_TLH
-   if (!enableTLHBatchClearing || comp->getOptions()->realTimeGC())
+   if (comp->getOption(TR_DisableDualTLH) || comp->getOptions()->realTimeGC())
       {
 #endif
       if (!maxZeroInitWordsPerIteration)
