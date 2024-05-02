@@ -7837,8 +7837,6 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
             initInfo->zeroInitSlots = NULL;
          }
 
-      bool isNotTargetMethod = strcmp(comp->signature(), "TPCH_ZeroInit.test()LMyClass;") != 0;
-      traceMsg(comp, "comp=%s, isNotTargetMethod=%d\n", comp->signature(), isNotTargetMethod);
       if (initInfo && initInfo->zeroInitSlots)
          {
          // Zero-initialize by explicit zero stores.
@@ -7935,10 +7933,9 @@ J9::X86::TreeEvaluator::VMnewEvaluator(
          J9JavaVM * jvm = fej9->getJ9JITConfig()->javaVM;
          monitorSlotIsInitialized = (jvm->lockwordMode != LOCKNURSERY_ALGORITHM_ALL_INHERIT);
          }
-      else if (isNotTargetMethod && (!initInfo || initInfo->numZeroInitSlots > 0) &&
+      else if ((!initInfo || initInfo->numZeroInitSlots > 0) &&
                !node->canSkipZeroInitialization())
          {
-         traceMsg(comp, "Zeroing object\n", node);
          // Initialize all slots
          //
          if (canUseFastInlineAllocation)
