@@ -7188,11 +7188,11 @@ static bool genZeroInitObject2(
       scratchReg = cg->allocateRegister(TR_FPR);
       generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
       int32_t offset = 0;
-      while (objectSize >= 16)
+      while (objectSize >= 8)
          {
-         generateMemRegInstruction(TR::InstOpCode::MOVDQUMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
-         objectSize -= 16;
-         offset += 16;
+         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+         objectSize -= 8;
+         offset += 8;
          }
       switch (objectSize)
          {
