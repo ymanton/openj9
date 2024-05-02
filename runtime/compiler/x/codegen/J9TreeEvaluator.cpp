@@ -6571,8 +6571,8 @@ static void genHeapAlloc2(
                                    generateX86MemoryReference(vmThreadReg,
                                                               offsetof(J9VMThread, heapAlloc), cg), cg);
 
-         if (comp->getOptLevel() < hot)
-            isTooSmallToPrefetch = allocationSizeOrDataOffset <= 0x40 ? true : false;
+         //if (comp->getOptLevel() < hot)
+         //   isTooSmallToPrefetch = allocationSizeOrDataOffset <= 0x40 ? true : false;
 
          allocationSizeOrDataOffset = (allocationSizeOrDataOffset+TR::Compiler->om.getObjectAlignmentInBytes()-1) & (-TR::Compiler->om.getObjectAlignmentInBytes());
 
