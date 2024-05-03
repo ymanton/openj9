@@ -7201,26 +7201,21 @@ static bool genZeroInitObject2(
       // -----------
       // Destination
       // -----------
-      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, segmentReg, generateX86MemoryReference(targetReg, headerSize, cg), cg);
-      if (comp->target().is64Bit())
-         {
-         scratchReg = cg->allocateRegister();
-         generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, scratchReg, targetReg, cg);
-         }
-      else
-         {
-         generateRegInstruction(TR::InstOpCode::PUSHReg, node, targetReg, cg);
-         }
-      generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, targetReg, targetReg, cg);
-      generateInstruction(TR::InstOpCode::REPSTOSB, node, cg);
-      if (comp->target().is64Bit())
-         {
-         generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, targetReg, scratchReg, cg);
-         }
-      else
-         {
-         generateRegInstruction(TR::InstOpCode::POPReg, node, targetReg, cg);
-         }
+      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, segmentReg, generateX86MemoryReference(targetReg, 0, cg), cg);
+      TR_ASSERT_FATAL_WITH_NODE(node, (TR::Compiler->om.getObjectAlignmentInBytes() % 8) == 0, "Needs >=8 byte alignment");
+      TR_ASSERT_FATAL_WITH_NODE(node, comp->target().is64Bit(), "Does this work on 32bit?");
+      TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
+      TR::Register *vmThreadReg = cg->getVMThreadRegister();
+      scratchReg = cg->allocateRegister(TR_FPR);
+      generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
+      generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
+      generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
+      generateRegImmInstruction(TR::InstOpCode::ADDRegImms(), node, segmentReg, 8, cg);
+      generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
+                        node,
+                        segmentReg,
+                        generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg), cg);
+      generateLabelInstruction(TR::InstOpCode::JB4, node, loopLabel, cg);
       return true;
       }
    else if (objectSize > 0)
