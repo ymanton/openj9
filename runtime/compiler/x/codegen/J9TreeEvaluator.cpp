@@ -6751,22 +6751,27 @@ static void genHeapAlloc2(
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg),
                                 segmentReg, cg);
 
+      static char* numPrefetchesAfterArraysStr = feGetEnv("TR_numPrefetchesAfterArrays");
+      static int numPrefetchesAfterArrays = numPrefetchesAfterArraysStr ? atoi(numPrefetchesAfterArraysStr) : 4;
       if (!isTooSmallToPrefetch && node->getOpCodeValue() != TR::New && cg->enableTLHPrefetching())
          {
          // ------------
          // 2nd PREFETCH
          // ------------
-         generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x100, cg), cg);
+         if (numPrefetchesAfterArrays >= 2)
+            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x100, cg), cg);
 
          // ------------
          // 3rd PREFETCH
          // ------------
-         generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x140, cg), cg);
+         if (numPrefetchesAfterArrays >= 3)
+            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x140, cg), cg);
 
          // ------------
          // 4th PREFETCH
          // ------------
-         generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x180, cg), cg);
+         if (numPrefetchesAfterArrays >= 4)
+            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x180, cg), cg);
          }
       }
    }
