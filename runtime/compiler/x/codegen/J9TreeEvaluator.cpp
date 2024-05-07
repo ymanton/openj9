@@ -7157,7 +7157,7 @@ static bool genZeroInitObject2(
       headerSize = static_cast<uint32_t>(cg->fej9()->getOffsetOfDiscontiguousArraySizeField());
       }
    TR_ASSERT(headerSize >= 4, "Object/Array header must be >= 4.");
-   objectSize -= headerSize;
+   //objectSize -= headerSize;
 
    if (!minRepstosdWords)
       {
@@ -7188,13 +7188,13 @@ static bool genZeroInitObject2(
          // ----------
          // FIXED SIZE
          // ----------
-         if (comp->target().is64Bit() && !IS_32BIT_SIGNED(objectSize))
+         if (comp->target().is64Bit() && !IS_32BIT_SIGNED(objectSize - headerSize))
             {
-            generateRegImm64Instruction(TR::InstOpCode::MOV8RegImm64, node, tempReg, objectSize, cg);
+            generateRegImm64Instruction(TR::InstOpCode::MOV8RegImm64, node, tempReg, objectSize - headerSize, cg);
             }
          else
             {
-            generateRegImmInstruction(TR::InstOpCode::MOVRegImm4(), node, tempReg, objectSize, cg);
+            generateRegImmInstruction(TR::InstOpCode::MOVRegImm4(), node, tempReg, objectSize - headerSize, cg);
             }
          }
 
@@ -7220,28 +7220,28 @@ static bool genZeroInitObject2(
       }
    else if (objectSize > 0)
       {
-      if (objectSize % 16 == 12)
+      /*if (objectSize % 16 == 12)
          {
          // Zero-out header to avoid a 12-byte residue
          objectSize += 4;
          headerSize -= 4;
-         }
+         }*/
       scratchReg = cg->allocateRegister(TR_FPR);
       generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
       int32_t offset = 0;
       while (objectSize >= 8)
          {
-         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
          objectSize -= 8;
          offset += 8;
          }
       switch (objectSize)
          {
          case 8:
-            generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+            generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
             break;
          case 4:
-            generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+            generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
             break;
          case 0:
             break;
