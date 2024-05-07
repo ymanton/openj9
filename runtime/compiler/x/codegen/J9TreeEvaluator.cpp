@@ -6667,8 +6667,21 @@ static void genHeapAlloc2(
       // ------------
 
       static bool prefetchAfterObjects = feGetEnv("TR_disablePrefetchAfterObjects") == NULL;
-      if (!isTooSmallToPrefetch && cg->enableTLHPrefetching() && (node->getOpCodeValue() != TR::New || prefetchAfterObjects))
-         generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
+      static char* numPrefetchesAfterArraysStr = feGetEnv("TR_numPrefetchesAfterArrays");
+      static int numPrefetchesAfterArrays = numPrefetchesAfterArraysStr ? atoi(numPrefetchesAfterArraysStr) : 4;
+      if (!isTooSmallToPrefetch && cg->enableTLHPrefetching())
+         {
+         if (node->getOpCodeValue() != TR::New)
+            {
+            if (numPrefetchesAfterArrays >= 1)
+               generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
+            }
+         else
+            {
+            if (prefetchAfterObjects)
+               generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
+            }
+         }
 
       if (shouldAlignToCacheBoundary)
          {
@@ -6751,8 +6764,6 @@ static void genHeapAlloc2(
                                 generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg),
                                 segmentReg, cg);
 
-      static char* numPrefetchesAfterArraysStr = feGetEnv("TR_numPrefetchesAfterArrays");
-      static int numPrefetchesAfterArrays = numPrefetchesAfterArraysStr ? atoi(numPrefetchesAfterArraysStr) : 4;
       if (!isTooSmallToPrefetch && node->getOpCodeValue() != TR::New && cg->enableTLHPrefetching())
          {
          // ------------
