@@ -6666,7 +6666,8 @@ static void genHeapAlloc2(
       // 1st PREFETCH
       // ------------
 
-      if (!isTooSmallToPrefetch && cg->enableTLHPrefetching())
+      static bool prefetchAfterObjects = feGetEnv("TR_disablePrefetchAfterObjects") == NULL;
+      if (!isTooSmallToPrefetch && cg->enableTLHPrefetching() && (node->getOpCodeValue() != TR::New || prefetchAfterObjects))
          generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
 
       if (shouldAlignToCacheBoundary)
