@@ -6423,6 +6423,21 @@ static void genHeapAlloc(
       }
    }
 
+static TR::InstOpCode::Mnemonic getPrefetchKind(int k)
+   {
+   switch (k)
+      {
+      case 0:
+         return TR::InstOpCode::PREFETCHT0;
+      case 1:
+         return TR::InstOpCode::PREFETCHT1;
+      case 2:
+         return TR::InstOpCode::PREFETCHT2;
+      default:
+         return TR::InstOpCode::PREFETCHNTA;
+      }
+   }
+
 // ------------------------------------------------------------------------------
 // genHeapAlloc2
 //
@@ -6669,17 +6684,21 @@ static void genHeapAlloc2(
       static bool prefetchAfterObjects = feGetEnv("TR_disablePrefetchAfterObjects") == NULL;
       static char* numPrefetchesAfterArraysStr = feGetEnv("TR_numPrefetchesAfterArrays");
       static int numPrefetchesAfterArrays = numPrefetchesAfterArraysStr ? atoi(numPrefetchesAfterArraysStr) : 4;
+      static char* prefetchDistanceStr = feGetEnv("TR_prefetchDistance");
+      static int prefetchDistance = prefetchDistanceStr ? atoi(prefetchDistanceStr) : 0xc0;
+      static char* prefetchKindStr = feGetEnv("TR_prefetchKind");
+      static TR::InstOpCode::Mnemonic prefetchKind = getPrefetchKind(prefetchKindStr ? atoi(prefetchKindStr) : 3);
       if (!isTooSmallToPrefetch && cg->enableTLHPrefetching())
          {
          if (node->getOpCodeValue() != TR::New)
             {
             if (numPrefetchesAfterArrays >= 1)
-               generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
+               generateMemInstruction(prefetchKind, node, generateX86MemoryReference(segmentReg, prefetchDistance, cg), cg);
             }
          else
             {
             if (prefetchAfterObjects)
-               generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0xc0, cg), cg);
+               generateMemInstruction(prefetchKind, node, generateX86MemoryReference(segmentReg, prefetchDistance, cg), cg);
             }
          }
 
@@ -6770,19 +6789,19 @@ static void genHeapAlloc2(
          // 2nd PREFETCH
          // ------------
          if (numPrefetchesAfterArrays >= 2)
-            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x100, cg), cg);
+            generateMemInstruction(prefetchKind, node, generateX86MemoryReference(segmentReg, prefetchDistance + (0x100 - 0xc0), cg), cg);
 
          // ------------
          // 3rd PREFETCH
          // ------------
          if (numPrefetchesAfterArrays >= 3)
-            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x140, cg), cg);
+            generateMemInstruction(prefetchKind, node, generateX86MemoryReference(segmentReg, prefetchDistance + (0x140 - 0xc0), cg), cg);
 
          // ------------
          // 4th PREFETCH
          // ------------
          if (numPrefetchesAfterArrays >= 4)
-            generateMemInstruction(TR::InstOpCode::PREFETCHNTA, node, generateX86MemoryReference(segmentReg, 0x180, cg), cg);
+            generateMemInstruction(prefetchKind, node, generateX86MemoryReference(segmentReg, prefetchDistance + (0x180 - 0xc0), cg), cg);
          }
       }
    }
