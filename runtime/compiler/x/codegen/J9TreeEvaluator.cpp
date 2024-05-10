@@ -7158,6 +7158,8 @@ static bool genZeroInitObject2(
          minRepstosdWords = MIN_REPSTOSD_WORDS; // Use default value
       }
 
+   static bool useGPR = comp->target().is64Bit() && feGetEnv("TR_useGPRForZeroInit") != NULL;
+
    if (sizeReg || objectSize >= minRepstosdWords)
       {
       // Zero-initialize by using REP TR::InstOpCode::STOSB.
@@ -7196,10 +7198,16 @@ static bool genZeroInitObject2(
       TR_ASSERT_FATAL_WITH_NODE(node, comp->target().is64Bit(), "Does this work on 32bit?");
       TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
       TR::Register *vmThreadReg = cg->getVMThreadRegister();
-      scratchReg = cg->allocateRegister(TR_FPR);
-      generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
+      scratchReg = cg->allocateRegister(useGPR ? TR_GPR : TR_FPR);
+      if (useGPR)
+         generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
+      else
+         generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
       generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
-      generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
+      if (useGPR)
+         generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
+      else
+         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
       generateRegImmInstruction(TR::InstOpCode::ADDRegImms(), node, segmentReg, 8, cg);
       generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
                         node,
@@ -7216,12 +7224,18 @@ static bool genZeroInitObject2(
          objectSize += 4;
          headerSize -= 4;
          }*/
-      scratchReg = cg->allocateRegister(TR_FPR);
-      generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
+      scratchReg = cg->allocateRegister(useGPR ? TR_GPR : TR_FPR);
+      if (useGPR)
+         generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
+      else
+         generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
       int32_t offset = 0;
       while (objectSize >= 8)
          {
-         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
+         if (useGPR)
+            generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
+         else
+            generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
          objectSize -= 8;
          offset += 8;
          }
