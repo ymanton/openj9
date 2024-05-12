@@ -5756,7 +5756,7 @@ static void genHeapAlloc(
 
    TR_J9VMBase *fej9 = (TR_J9VMBase *)(cg->fe());
 
-   static char *disableAllocationAlignment = feGetEnv("TR_DisableAllocationAlignment");
+   static bool disableAllocationAlignment = feGetEnv("TR_EnableAllocationAlignment") == NULL;
 
    if (comp->getOptions()->realTimeGC())
       {
@@ -6467,7 +6467,7 @@ static void genHeapAlloc2(
    bool isTooSmallToPrefetch = false;
    cg->generateDebugCounter("inlinealloc");
 
-   static char *disableAllocationAlignment = feGetEnv("TR_DisableAllocationAlignment");
+   static bool disableAllocationAlignment = feGetEnv("TR_EnableAllocationAlignment") == NULL;
 
       {
       bool shouldAlignToCacheBoundary = false;
