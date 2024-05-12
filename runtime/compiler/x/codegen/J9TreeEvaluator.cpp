@@ -7147,7 +7147,12 @@ static bool genZeroInitObject2(
       headerSize = static_cast<uint32_t>(cg->fej9()->getOffsetOfDiscontiguousArraySizeField());
       }
    TR_ASSERT(headerSize >= 4, "Object/Array header must be >= 4.");
-   //objectSize -= headerSize;
+   traceMsg(comp, "objectSize=%d, headerSize=%d\n", objectSize, headerSize);
+   objectSize -= headerSize;
+
+   static bool bp = feGetEnv("TR_bp") != NULL;
+   if (bp)
+      generateInstruction(TR::InstOpCode::INT3, node, cg);
 
    if (!minRepstosdWords)
       {
@@ -7157,13 +7162,16 @@ static bool genZeroInitObject2(
       else
          minRepstosdWords = MIN_REPSTOSD_WORDS; // Use default value
       }
-
-   static bool useGPR = comp->target().is64Bit() && feGetEnv("TR_useGPRForZeroInit") != NULL;
-
+   traceMsg(comp, "minRepstosdWords=%d\n", minRepstosdWords);
+   int32_t leadingBytes = (TR::Compiler->om.getObjectAlignmentInBytes() - (headerSize % TR::Compiler->om.getObjectAlignmentInBytes())) % TR::Compiler->om.getObjectAlignmentInBytes();
+   traceMsg(comp, "leadingBytes=%d\n", leadingBytes);
    if (sizeReg || objectSize >= minRepstosdWords)
       {
       // Zero-initialize by using REP TR::InstOpCode::STOSB.
       //
+      TR::LabelSymbol *doneZeroLabel = generateLabelSymbol(cg);
+      scratchReg = cg->allocateRegister(TR_GPR);
+      generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
       if (sizeReg)
          {
          // -------------
@@ -7173,79 +7181,74 @@ static bool genZeroInitObject2(
          // -------------
          // Subtract off the header size and initialize the remaining slots.
          //
-         generateRegImmInstruction(TR::InstOpCode::SUBRegImms(), node, tempReg, headerSize, cg);
+         traceMsg(comp, "Generating subtract pf headerSize(%d) + leadingBytes(%d) = %d from object size reg\n", headerSize, leadingBytes, headerSize + leadingBytes);
+         generateRegImmInstruction(TR::InstOpCode::SUBRegImms(), node, tempReg, headerSize + leadingBytes, cg);
          }
       else
          {
+         traceMsg(comp, "Materializing objectSize(%d) - headerSize(%d) - leadingBytes(%d) = %d into register\n", objectSize, headerSize, leadingBytes, objectSize - headerSize - leadingBytes);
          // ----------
          // FIXED SIZE
          // ----------
-         if (comp->target().is64Bit() && !IS_32BIT_SIGNED(objectSize - headerSize))
+         if (comp->target().is64Bit() && !IS_32BIT_SIGNED(objectSize - leadingBytes))
             {
-            generateRegImm64Instruction(TR::InstOpCode::MOV8RegImm64, node, tempReg, objectSize - headerSize, cg);
+            generateRegImm64Instruction(TR::InstOpCode::MOV8RegImm64, node, tempReg, objectSize - leadingBytes, cg);
             }
          else
             {
-            generateRegImmInstruction(TR::InstOpCode::MOVRegImm4(), node, tempReg, objectSize - headerSize, cg);
+            generateRegImmInstruction(TR::InstOpCode::MOVRegImm4(), node, tempReg, objectSize - leadingBytes, cg);
             }
          }
 
       // -----------
       // Destination
       // -----------
-      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, segmentReg, generateX86MemoryReference(targetReg, 0, cg), cg);
+      TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
+      int32_t offset = 0;
+      while (leadingBytes > 0)
+         {
+         generateMemRegInstruction(TR::InstOpCode::SMemReg(false), node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+         leadingBytes -= 4;
+         offset += 4;
+         }
+      if (sizeReg)
+         generateLabelInstruction(TR::InstOpCode::JLE4, node, loopLabel, cg);
+      // There should be a compile time check here to see if known size objects need any further clearing, but this path is for large objects
+      // and they will always unless `minRepstosdWords` is adjusted downwards (see above).
+      generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, segmentReg, generateX86MemoryReference(targetReg, headerSize + offset, cg), cg);
       TR_ASSERT_FATAL_WITH_NODE(node, (TR::Compiler->om.getObjectAlignmentInBytes() % 8) == 0, "Needs >=8 byte alignment");
       TR_ASSERT_FATAL_WITH_NODE(node, comp->target().is64Bit(), "Does this work on 32bit?");
-      TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
-      TR::Register *vmThreadReg = cg->getVMThreadRegister();
-      scratchReg = cg->allocateRegister(useGPR ? TR_GPR : TR_FPR);
-      if (useGPR)
-         generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
-      else
-         generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
       generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
-      if (useGPR)
-         generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
-      else
-         generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
+      generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(segmentReg, 0, cg), scratchReg, cg);
       generateRegImmInstruction(TR::InstOpCode::ADDRegImms(), node, segmentReg, 8, cg);
-      generateRegMemInstruction(TR::InstOpCode::CMPRegMem(),
-                        node,
-                        segmentReg,
-                        generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg), cg);
-      generateLabelInstruction(TR::InstOpCode::JB4, node, loopLabel, cg);
+      generateRegImmInstruction(TR::InstOpCode::SUBRegImms(), node, tempReg, 8, cg);
+      generateLabelInstruction(TR::InstOpCode::JNE4, node, loopLabel, cg);
+      generateLabelInstruction(TR::InstOpCode::label, node, doneZeroLabel, cg);
       return true;
       }
    else if (objectSize > 0)
       {
-      /*if (objectSize % 16 == 12)
-         {
-         // Zero-out header to avoid a 12-byte residue
-         objectSize += 4;
-         headerSize -= 4;
-         }*/
-      scratchReg = cg->allocateRegister(useGPR ? TR_GPR : TR_FPR);
-      if (useGPR)
-         generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
-      else
-         generateRegRegInstruction(TR::InstOpCode::PXORRegReg, node, scratchReg, scratchReg, cg);
+      scratchReg = cg->allocateRegister(TR_GPR);
+      generateRegRegInstruction(TR::InstOpCode::XORRegReg(), node, scratchReg, scratchReg, cg);
       int32_t offset = 0;
+      objectSize -= leadingBytes;
+      TR_ASSERT_FATAL_WITH_NODE(node, objectSize >= 0, "Expecting object size to be a multiple of min alignment");
+      while (leadingBytes > 0)
+         {
+         generateMemRegInstruction(TR::InstOpCode::SMemReg(false), node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
+         leadingBytes -= 4;
+         offset += 4;
+         }
       while (objectSize >= 8)
          {
-         if (useGPR)
-            generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
-         else
-            generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
+         generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
          objectSize -= 8;
          offset += 8;
          }
       switch (objectSize)
          {
-         case 8:
-            generateMemRegInstruction(TR::InstOpCode::MOVQMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
-            break;
          case 4:
-            generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, /*headerSize +*/ offset, cg), scratchReg, cg);
+            generateMemRegInstruction(TR::InstOpCode::MOVDMemReg, node, generateX86MemoryReference(targetReg, headerSize + offset, cg), scratchReg, cg);
             break;
          case 0:
             break;
