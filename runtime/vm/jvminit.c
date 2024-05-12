@@ -6471,10 +6471,10 @@ processCompressionOptions(J9JavaVM *vm)
 	argIndex2 = FIND_AND_CONSUME_VMARG(EXACT_MATCH, VMOPT_XXNOCOMPACTSTRINGS, NULL);
 
 	/* Default setting */
-	vm->strCompEnabled = FALSE;
+	vm->strCompEnabled = TRUE;
 
-	if (argIndex1 > argIndex2) {
-		vm->strCompEnabled = TRUE;
+	if (argIndex2 > argIndex1) {
+		vm->strCompEnabled = FALSE;
 	}
 }
 
