@@ -987,5 +987,4 @@ TraceEvent=Trc_VM_VMInitStages_isDebugOnRestoreEnabled NoEnv Overhead=1 Level=3 
 TraceEvent=Trc_VM_hookAboutToBootstrapEvent_debugModeRequested Overhead=1 Level=3 Template="hookAboutToBootstrapEvent() debugModeRequested is TRUE"
 TraceEvent=Trc_VM_mustReportEnterStepOrBreakpoint_hookedOrReserved NoEnv Overhead=1 Level=5 Template="mustReportEnterStepOrBreakpoint() hookedOrReserved(%zu)"
 
-TraceEvent=Trc_VM_criu_disclaimAllClassMemory_segment Obsolete Overhead=1 Level=5 Template="disclaimAllClassMemory segment (%p): baseAddress=%p, heapBase=%p, size=%u, type=%x"
 TraceEvent=Trc_VM_criu_disclaimAllClassMemory_segment noEnv Overhead=1 Level=5 Template="disclaimAllClassMemory segment (%p): baseAddress=%p, heapBase=%p, size=%u, type=%x"
