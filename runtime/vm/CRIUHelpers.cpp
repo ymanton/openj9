@@ -2031,6 +2031,22 @@ criuCheckpointJVMImpl(JNIEnv *env,
 			}
 		}
 
+#if defined(LINUX)
+		if (hasDumpSucceeded && J9_ARE_ALL_BITS_SET(vm->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_CRIU_DISCLAIM_CLASSES)) {
+			systemReturnCode = vm->internalVMFunctions->disclaimAllClassMemory(vm);
+			if (0 != systemReturnCode) {
+				systemReturnCode = errno;
+				currentExceptionClass = vm->checkpointState.criuJVMCheckpointExceptionClass;
+				nlsMsgFormat = j9nls_lookup_message(
+					J9NLS_DO_NOT_PRINT_MESSAGE_TAG | J9NLS_DO_NOT_APPEND_NEWLINE,
+					J9NLS_VM_CRIU_DISCLAIM_ALL_CLASS_MEMORY_FAILURE,
+					NULL);
+				j9mem_free_memory(syslogOptions);
+				goto wakeJavaThreadsWithExclusiveVMAccess;
+			}
+		}
+#endif /* defined(LINUX) */
+
 wakeJavaThreads:
 		/* Needs to be run unconditionally as there may have been locking events in the checkpoint side. */
 		if (FALSE == runDelayedLockRelatedOperations(currentThread)) {
