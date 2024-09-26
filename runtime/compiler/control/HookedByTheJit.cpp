@@ -4468,6 +4468,8 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
    static uint64_t lastCodeCacheDisclaimTime = 0;
    static int32_t  lastNumAllocatedCodeCaches = 0;
    static uint64_t lastIProfilerDisclaimTime = 0;
+   static uint64_t lastClassMemoryDisclaimTime = 0;
+   static int32_t  lastNumLoadedClasses = 0;
    static uint32_t lastNumCompilationsDuringIProfilerDisclaim = 0;
 
    J9JITConfig *jitConfig = compInfo->getJITConfig();
@@ -4481,6 +4483,23 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
 
    if (javaVM->phase != J9VM_PHASE_NOT_STARTUP || jitState == STARTUP_STATE)
       return;
+
+   static bool disclaimClassMemory = feGetEnv("TR_disableDisclaimClassMem") == NULL;
+   if (disclaimClassMemory)
+      {
+      if (crtElapsedTime > lastClassMemoryDisclaimTime + TR::Options::_minTimeBetweenMemoryDisclaims)
+         {
+         TR::PersistentInfo *persistentInfo = compInfo->getPersistentInfo();
+         uint32_t numLoadedClasses = (uint32_t)persistentInfo->getNumLoadedClasses();
+         if (numLoadedClasses > lastNumLoadedClasses ||
+            crtElapsedTime > lastClassMemoryDisclaimTime + 12 * TR::Options::_minTimeBetweenMemoryDisclaims)
+            {
+            javaVM->internalVMFunctions->disclaimAllClassMemory(javaVM);
+            lastClassMemoryDisclaimTime = crtElapsedTime;
+            lastNumLoadedClasses = numLoadedClasses;
+            }
+         }
+      }
 
    if (TR_DataCacheManager::getManager()->isDisclaimEnabled())
       {
