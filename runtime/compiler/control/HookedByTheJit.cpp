@@ -4567,6 +4567,16 @@ void disclaimSharedClassCache(TR_J9SharedCache *sharedCache, uint64_t crtElapsed
    }
 #endif // defined(J9VM_OPT_SHARED_CLASSES) && defined(LINUX)
 
+void disclaimClassMemory(J9JavaVM *javaVM, uint64_t crtElapsedTime)
+   {
+   size_t rssBefore = getRSS_Kb();
+   javaVM->internalVMFunctions->disclaimAllClassMemory(javaVM);
+   size_t rssAfter = getRSS_Kb();
+   if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerbosePerformance))
+      TR_VerboseLog::writeLineLocked(TR_Vlog_PERF, "t=%u JIT disclaimed class memory RSS before=%zu KB, RSS after=%zu KB, delta=%zd KB = %5.2f%%",
+                                     (uint32_t)crtElapsedTime, rssBefore, rssAfter, rssBefore - rssAfter, ((long)(rssAfter - rssBefore) * 100.0 / rssBefore));
+   }
+
 void disclaimDataCaches(uint64_t crtElapsedTime)
    {
    size_t rssBefore = getRSS_Kb();
@@ -4610,6 +4620,8 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
    static int32_t  lastNumAllocatedCodeCaches = 0;
    static uint64_t lastIProfilerDisclaimTime = 0;
    static uint64_t lastSCCDisclaimTime = 0;
+   static uint64_t lastClassMemoryDisclaimTime = 0;
+   static int32_t  lastNumLoadedClasses = 0;
    static uint32_t lastNumCompilationsDuringIProfilerDisclaim = 0;
 
    J9JITConfig *jitConfig = compInfo->getJITConfig();
@@ -4637,6 +4649,23 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
          }
       }
 #endif // defined(J9VM_OPT_SHARED_CLASSES) && defined(LINUX)
+
+   static bool disclaimClassMem = feGetEnv("TR_enableDisclaimClassMem") != NULL;
+   if (disclaimClassMem)
+      {
+      if (crtElapsedTime > lastClassMemoryDisclaimTime + TR::Options::_minTimeBetweenMemoryDisclaims)
+         {
+         TR::PersistentInfo *persistentInfo = compInfo->getPersistentInfo();
+         uint32_t numLoadedClasses = (uint32_t)persistentInfo->getNumLoadedClasses();
+         if (numLoadedClasses > lastNumLoadedClasses ||
+            crtElapsedTime > lastClassMemoryDisclaimTime + 12 * TR::Options::_minTimeBetweenMemoryDisclaims)
+            {
+            disclaimClassMemory(javaVM, crtElapsedTime);
+            lastClassMemoryDisclaimTime = crtElapsedTime;
+            lastNumLoadedClasses = numLoadedClasses;
+            }
+         }
+      }
 
    if (TR_DataCacheManager::getManager()->isDisclaimEnabled())
       {
