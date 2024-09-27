@@ -4461,6 +4461,17 @@ void disclaimCodeCaches(uint64_t crtElapsedTime)
                                      (uint32_t)crtElapsedTime, numDisclaimed, rssBefore, rssAfter, rssBefore - rssAfter, ((long)(rssAfter - rssBefore) * 100.0 / rssBefore));
    }
 
+// for madvise
+#ifdef LINUX
+#include <sys/mman.h>
+#ifndef MADV_NOHUGEPAGE
+#define MADV_NOHUGEPAGE  15
+#endif // MADV_NOHUGEPAGE
+#ifndef MADV_PAGEOUT
+#define MADV_PAGEOUT     21
+#endif // MADV_PAGEOUT
+#endif
+
 void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime, uint8_t jitState)
    {
    static uint64_t lastDataCacheDisclaimTime = 0;
@@ -4470,6 +4481,7 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
    static uint64_t lastIProfilerDisclaimTime = 0;
    static uint64_t lastClassMemoryDisclaimTime = 0;
    static int32_t  lastNumLoadedClasses = 0;
+   static uint64_t lastSCCDisclaimTime = 0;
    static uint32_t lastNumCompilationsDuringIProfilerDisclaim = 0;
 
    J9JITConfig *jitConfig = compInfo->getJITConfig();
@@ -4500,6 +4512,39 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
             }
          }
       }
+
+#if defined(J9VM_OPT_SHARED_CLASSES)
+typedef char* BlockPtr;
+#define RWUPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->readWriteSRP)
+#define SEGUPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->segmentSRP)
+#define CAEND(ca) (((BlockPtr)(ca)) + (ca)->totalBytes)
+#define UPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->updateSRP)
+   static bool disclaimSCC = feGetEnv("TR_disableDisclaimSCC") == NULL;
+   if (javaVM->sharedClassConfig && disclaimSCC)
+      {
+      if (crtElapsedTime > lastSCCDisclaimTime + 12 * TR::Options::_minTimeBetweenMemoryDisclaims)
+         {
+         J9SharedClassCacheDescriptor *scHead = javaVM->sharedClassConfig->cacheDescriptorList;
+         J9SharedClassCacheDescriptor *scCur = scHead;
+         do
+            {
+            char *rwStart = RWUPDATEPTR(scCur->cacheStartAddress);
+            char *rwNextPage = (char *)(((UDATA)rwStart + (scCur->osPageSizeInHeader - 1)) & ~(scCur->osPageSizeInHeader - 1));
+            char *segEnd = SEGUPDATEPTR(scCur->cacheStartAddress);
+            if (rwNextPage < segEnd)
+               madvise(rwNextPage, segEnd - rwNextPage, MADV_PAGEOUT);
+            char *updateStart = UPDATEPTR(scCur->cacheStartAddress);
+            char *updateNextPage = (char *)(((UDATA)updateStart + (scCur->osPageSizeInHeader - 1)) & ~(scCur->osPageSizeInHeader - 1));
+            char *end = CAEND(scCur->cacheStartAddress);
+            if (updateNextPage < end)
+               madvise(updateNextPage, end - updateNextPage, MADV_PAGEOUT);
+            scCur = scCur->next;
+            }
+         while (scCur != scHead);
+         lastSCCDisclaimTime = crtElapsedTime;
+         }
+      }
+#endif // J9VM_OPT_SHARED_CLASSES
 
    if (TR_DataCacheManager::getManager()->isDisclaimEnabled())
       {
