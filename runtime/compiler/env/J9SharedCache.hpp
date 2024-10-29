@@ -105,6 +105,9 @@ public:
 
    static void validateAOTHeader(J9JITConfig *jitConfig, J9VMThread *vmThread, TR::CompilationInfo *compInfo);
 
+   virtual bool isDisclaimEnabled() { return _disclaimEnabled; }
+   virtual int32_t disclaimSharedCaches();
+
    /**
     * \brief Converts a shared cache offset, calculated from the end of the SCC, into the
     *        metadata section of the SCC into a pointer.
@@ -421,6 +424,8 @@ public:
    virtual J9SharedClassCacheDescriptor *getCacheDescriptorList();
 
 protected:
+   static bool disclaim(const uint8_t *start, const uint8_t *end, UDATA pageSize, bool trace);
+
    /**
     * \brief Helper method; used to check if a pointer is within the SCC
     *
@@ -619,6 +624,8 @@ private:
 
    uint32_t _logLevel;
    bool _verboseHints;
+
+   bool _disclaimEnabled;
 
    static TR_J9SharedCacheDisabledReason _sharedCacheState;
    static TR_YesNoMaybe                  _sharedCacheDisabledBecauseFull;

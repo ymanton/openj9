@@ -4426,54 +4426,14 @@ size_t getRSS_Kb()
    return rss;
    }
 
-// for madvise
-#ifdef LINUX
-#include <sys/mman.h>
-#ifndef MADV_NOHUGEPAGE
-#define MADV_NOHUGEPAGE  15
-#endif // MADV_NOHUGEPAGE
-#ifndef MADV_PAGEOUT
-#define MADV_PAGEOUT     21
-#endif // MADV_PAGEOUT
-#endif
-
 #if defined(J9VM_OPT_SHARED_CLASSES)
-typedef char* BlockPtr;
-#define RWUPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->readWriteSRP)
-#define SEGUPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->segmentSRP)
-#define CAEND(ca) (((BlockPtr)(ca)) + (ca)->totalBytes)
-#define UPDATEPTR(ca) (((BlockPtr)(ca)) + (ca)->updateSRP)
-
-void disclaimSCCMemory(J9JavaVM *javaVM, uint64_t crtElapsedTime)
+void disclaimSharedClassCache(TR_J9SharedCache *sharedCache, uint64_t crtElapsedTime)
    {
-   int numDisclaimed = 0;
    size_t rssBefore = getRSS_Kb();
-   J9SharedClassCacheDescriptor *scHead = javaVM->sharedClassConfig->cacheDescriptorList;
-   J9SharedClassCacheDescriptor *scCur = scHead;
-   do
-      {
-      char *rwStart = RWUPDATEPTR(scCur->cacheStartAddress);
-      char *rwNextPage = (char *)(((UDATA)rwStart + (scCur->osPageSizeInHeader - 1)) & ~(scCur->osPageSizeInHeader - 1));
-      char *segEnd = SEGUPDATEPTR(scCur->cacheStartAddress);
-      if (rwNextPage < segEnd)
-         {
-         madvise(rwNextPage, segEnd - rwNextPage, MADV_PAGEOUT);
-         numDisclaimed++;
-         }
-      char *updateStart = UPDATEPTR(scCur->cacheStartAddress);
-      char *updateNextPage = (char *)(((UDATA)updateStart + (scCur->osPageSizeInHeader - 1)) & ~(scCur->osPageSizeInHeader - 1));
-      char *end = CAEND(scCur->cacheStartAddress);
-      if (updateNextPage < end)
-         {
-         madvise(updateNextPage, end - updateNextPage, MADV_PAGEOUT);
-         numDisclaimed++;
-         }
-      scCur = scCur->next;
-      }
-   while (scCur != scHead);
+   int32_t numDisclaimed = sharedCache->disclaimSharedCaches();
    size_t rssAfter = getRSS_Kb();
    if (TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerbosePerformance))
-      TR_VerboseLog::writeLineLocked(TR_Vlog_PERF, "t=%u JIT disclaimed %d SCC segments  RSS before=%zu KB, RSS after=%zu KB, delta=%zu KB",
+      TR_VerboseLog::writeLineLocked(TR_Vlog_PERF, "t=%u JIT disclaimed %d SCC segments  RSS before=%zu KB, RSS after=%zu KB, delta=%zd KB",
                                      (uint32_t)crtElapsedTime, numDisclaimed, rssBefore, rssAfter, rssBefore - rssAfter);
    }
 #endif // J9VM_OPT_SHARED_CLASSES
@@ -4565,12 +4525,14 @@ void memoryDisclaimLogic(TR::CompilationInfo *compInfo, uint64_t crtElapsedTime,
       }
 
 #if defined(J9VM_OPT_SHARED_CLASSES)
-   static bool disclaimSCC = feGetEnv("TR_enableDisclaimSCC") != NULL;
-   if (javaVM->sharedClassConfig && disclaimSCC)
+   TR_J9VMBase *fej9 = TR_J9VMBase::get(jitConfig, compInfo->getSamplerThread(), TR_J9VMBase::AOT_VM);
+   TR_J9SharedCache *sharedCache = fej9->sharedCache();
+   if (sharedCache->isDisclaimEnabled())
       {
+      // Disclaim if there was a large time interval since the last disclaim
       if (crtElapsedTime > lastSCCDisclaimTime + 12 * TR::Options::_minTimeBetweenMemoryDisclaims)
          {
-         disclaimSCCMemory(javaVM, crtElapsedTime);
+         disclaimSharedClassCache(sharedCache, crtElapsedTime);
          lastSCCDisclaimTime = crtElapsedTime;
          }
       }
