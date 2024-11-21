@@ -464,9 +464,4 @@ J9InternalVMFunctions J9InternalFunctions = {
 	setJFRRecordingFileName,
 	tearDownJFR,
 #endif /* defined(J9VM_OPT_JFR) */
-#if defined(J9VM_OPT_SNAPSHOTS)
-	initializeSnapshotClassLoaderObject,
-	initializeSnapshotClassObject,
-	loadWarmClassFromSnapshot,
-#endif /* defined(J9VM_OPT_SNAPSHOTS) */
 };

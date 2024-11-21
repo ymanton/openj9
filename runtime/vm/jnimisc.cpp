@@ -116,14 +116,7 @@ getCurrentClassLoader(J9VMThread *currentThread)
 		} else {
 			classLoader = vm->applicationClassLoader;
 			/* If the app loader doesn't exist yet, use the boot loader */
-			if ((NULL == classLoader)
-#if defined(J9VM_OPT_SNAPSHOTS)
-				/* Need to preserve the order. Classloaders should not be considered active until
-				 * the classloader object is set
-				 */
-				|| (NULL == classLoader->classLoaderObject)
-#endif /* defined(J9VM_OPT_SNAPSHOTS) */
-			) {
+			if (NULL == classLoader) {
 				classLoader = vm->systemClassLoader;
 			}
 		}
