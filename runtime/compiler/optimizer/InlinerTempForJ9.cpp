@@ -3236,6 +3236,9 @@ int32_t TR_Inliner::perform()
         comp()->getFlowGraph()->setFrequencies();
     }
 
+    // Always set post-inlining node count, even if no inlining occurred
+    comp()->setPostInliningNodeCount();
+
     // this should run after all inlining is done in order not to
     // miss any VectorAPI methods
     if (TR_VectorAPIExpansion::findVectorMethods(comp()))

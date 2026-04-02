@@ -10308,7 +10308,7 @@ void TR::CompilationInfoPerThreadBase::logCompilationSuccess(J9VMThread *vmThrea
                 TR_VerboseLog::write(" Q_SZ=%d Q_SZI=%d QW=%d", _compInfo.getMethodQueueSize(),
                     _compInfo.getNumQueuedFirstTimeCompilations(), _compInfo.getQueueWeight());
 
-                TR_VerboseLog::write(" j9m=%p bcsz=%u", method, bytecodeSize);
+                TR_VerboseLog::write(" j9m=%p bcsz=%u INL_SZ=%d", method, bytecodeSize, compiler->getPostInliningNodeCount());
 
                 if (!_methodBeingCompiled->_async)
                     TR_VerboseLog::write(" sync"); // flag the synchronous compilations
