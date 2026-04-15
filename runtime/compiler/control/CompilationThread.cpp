@@ -209,6 +209,25 @@ void TR::CompilationInfoPerThreadBase::setCompilation(TR::Compilation *compiler)
 thread_local TR::CompilationInfoPerThread *TR::compInfoPT;
 #endif /* defined(J9VM_OPT_JITSERVER) */
 
+static uint64_t getThreadCPUTime() {
+    pthread_t thread = pthread_self();
+    clockid_t clock_id;
+    struct timespec time;
+
+    // Get the CPU clock ID for the current thread
+    int result = pthread_getcpuclockid(thread, &clock_id);
+    if (result == 0) {
+        // Get the CPU time
+        if (clock_gettime(clock_id, &time) == 0) {
+            uint64_t cpuTimeNanos = ((uint64_t)time.tv_sec * 1000000000ULL) + time.tv_nsec;
+            //uint64_t cpuTimeMicros = cpuTimeNanos / 1000;
+            // Use cpuTimeMicros as replacement for j9time_usec_clock()
+            return cpuTimeNanos;
+        }
+    }
+    return 0;
+}
+
 static uintptr_t jitSignalHandler(struct J9PortLibrary *portLibrary, uint32_t gpType, void *gpInfo, void *handler_arg)
 {
     static int32_t numCrashes = 0;
@@ -7684,7 +7703,7 @@ void *TR::CompilationInfoPerThreadBase::compile(J9VMThread *vmThread, TR_MethodT
 
     {
         PORT_ACCESS_FROM_JITCONFIG(jitConfig);
-        setTimeWhenCompStarted(j9time_usec_clock());
+        setTimeWhenCompStarted(getThreadCPUTime());
     }
 
     TR_MethodMetaData *metaData = NULL;
@@ -10051,7 +10070,7 @@ void TR::CompilationInfoPerThreadBase::logCompilationSuccess(J9VMThread *vmThrea
         }
 
         PORT_ACCESS_FROM_JITCONFIG(_jitConfig);
-        uintptr_t currentTime = j9time_usec_clock();
+        uintptr_t currentTime = getThreadCPUTime();
         uintptr_t translationTime = currentTime - getTimeWhenCompStarted();
         if (TR::Options::_largeTranslationTime > 0 && translationTime > (uintptr_t)TR::Options::_largeTranslationTime) {
             OMR::Logger *log = compiler->log();
@@ -10553,7 +10572,7 @@ void TR::CompilationInfoPerThreadBase::processException(J9VMThread *vmThread,
         _methodBeingCompiled->_compErrCode = compilationCHTableCommitFailure;
         if (TR::Options::isAnyVerboseOptionSet(TR_VerbosePerformance, TR_VerboseCompileEnd, TR_VerboseCompFailure)) {
             uintptr_t translationTime
-                = j9time_usec_clock() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
+                = getThreadCPUTime() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
             char compilationTypeString[15] = { 0 };
             TR::snprintfNoTrunc(compilationTypeString, sizeof(compilationTypeString), "%s%s",
                 compiler->fej9()->isAOT_DEPRECATED_DO_NOT_USE() ? "AOT " : "",
@@ -10570,7 +10589,7 @@ void TR::CompilationInfoPerThreadBase::processException(J9VMThread *vmThread,
         shouldProcessExceptionCommonTasks = false;
         if (TR::Options::isAnyVerboseOptionSet(TR_VerbosePerformance, TR_VerboseCompileEnd, TR_VerboseCompFailure)) {
             uintptr_t translationTime
-                = j9time_usec_clock() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
+                = getThreadCPUTime() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
             char compilationTypeString[15] = { 0 };
             TR::snprintfNoTrunc(compilationTypeString, sizeof(compilationTypeString), "%s%s",
                 compiler->fej9()->isAOT_DEPRECATED_DO_NOT_USE() ? "AOT " : "",
@@ -10646,7 +10665,7 @@ void TR::CompilationInfoPerThreadBase::processExceptionCommonTasks(J9VMThread *v
 
     if (TR::Options::isAnyVerboseOptionSet(TR_VerbosePerformance, TR_VerboseCompileEnd, TR_VerboseCompFailure)) {
         uintptr_t translationTime
-            = j9time_usec_clock() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
+            = getThreadCPUTime() - getTimeWhenCompStarted(); // get the time it took to fail the compilation
 
         char compilationTypeString[15] = { 0 };
         bool isProfiledComp = compiler->isProfilingCompilation();
