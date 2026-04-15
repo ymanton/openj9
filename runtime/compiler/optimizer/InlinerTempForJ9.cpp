@@ -3993,6 +3993,49 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                 calltarget->_myCallSite->_callNode);
             size = 10;
         } else {
+            // Check early if this is a large compiled method to adjust the size threshold before expensive code size calculation
+            // This optimization moves the "is compiled" check earlier to save compilation time
+            int32_t initialBytecodeSize = 0;
+            if (calltarget->_calleeMethod) {
+                initialBytecodeSize = getJ9InitialBytecodeSize(calltarget->_calleeMethod, 0, comp());
+            }
+            
+            // Get block frequency for the check
+            int32_t frequency2 = 0;
+            TR::TreeTop *callNodeTreeTop = calltarget->_myCallSite->_callNodeTreeTop;
+            if (callNodeTreeTop) {
+                TR::Block *block = callNodeTreeTop->getEnclosingBlock();
+                frequency2 = comp()->convertNonDeterministicInput(block->getFrequency(),
+                    MAX_BLOCK_COUNT + MAX_COLD_BLOCK_COUNT, randomGenerator(), 0);
+            }
+            
+            // Perform early "is compiled" check and adjust threshold if needed
+            if (initialBytecodeSize > 0 && calltarget->_calleeMethod) {
+                int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
+                int32_t veryLargeCompiledMethodThreshold
+                    = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
+                int32_t veryLargeCompiledMethodFaninThreshold
+                    = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
+
+                static const char *cmt = feGetEnv("TR_CompiledMethodCallGraphThreshold");
+                if (cmt) {
+                    static const int32_t callGraphSizeBasedThreshold = atoi(cmt);
+                    veryLargeCompiledMethodThreshold = callGraphSizeBasedThreshold;
+                }
+
+                bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods)
+                    && isLargeCompiledMethod(calltarget->_calleeMethod, initialBytecodeSize, frequency2, exemptionFreqCutoff,
+                        veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
+                
+                if (largeCompiledCallee) {
+                    // Adjust the threshold before calculateCodeSize to save compilation time
+                    _maxRecursiveCallByteCodeSizeEstimate = (int32_t)(_maxRecursiveCallByteCodeSizeEstimate * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor);
+                    heuristicTrace(tracer(),
+                        "Early check: Adjusted _maxRecursiveCallByteCodeSizeEstimate to %d for large compiled method %s",
+                        _maxRecursiveCallByteCodeSizeEstimate, tracer()->traceSignature(calltarget->_calleeSymbol));
+                }
+            }
+            
             if (currentBlockHasExceptionSuccessors && ecs->aggressivelyInlineThrows()) {
                 _maxRecursiveCallByteCodeSizeEstimate <<= 3;
                 heuristicTrace(tracer(),
@@ -4184,6 +4227,9 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                             callsite->_callNode, frequency2);
 
                     if (size > 0) {
+                        // Note: The early "is compiled" check has already adjusted _maxRecursiveCallByteCodeSizeEstimate
+                        // before calculateCodeSize was called. Here we apply the size adjustment to the actual calculated size
+                        // for consistency with the original behavior, though the main benefit comes from the early check.
                         int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
                         int32_t veryLargeCompiledMethodThreshold
                             = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
@@ -4201,6 +4247,9 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                                 veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
                         if (largeCompiledCallee) {
                             size = size * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor;
+                            heuristicTrace(tracer(),
+                                "WeighCallSite: Adjusted size from %d to %d for large compiled method (late check)",
+                                origSize, size);
                         } else if (frequency2 > borderFrequency) {
                             float factor = (float)(maxFrequency - frequency2) / (float)maxFrequency;
                             factor = std::max(factor, 0.4f);
