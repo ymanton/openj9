@@ -4004,7 +4004,10 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                     // Get the binary size of the compiled method body
                     void *startPC = calltarget->_calleeMethod->startAddressForJittedMethod();
                     if (startPC) {
-                        J9JITExceptionTable *metaData = comp()->fej9()->getJITExceptionTable(startPC);
+                        // Use jitGetExceptionTableFromPC to get the metadata
+                        J9JITConfig *jitConfig = comp()->fej9()->getJ9JITConfig();
+                        J9VMThread *vmThread = comp()->fej9()->vmThread();
+                        J9JITExceptionTable *metaData = jitConfig->jitGetExceptionTableFromPC(vmThread, (UDATA)startPC);
                         if (metaData) {
                             // Calculate binary size from metadata
                             compiledBodySize = (int32_t)((uintptr_t)metaData->endPC - (uintptr_t)metaData->startPC);
