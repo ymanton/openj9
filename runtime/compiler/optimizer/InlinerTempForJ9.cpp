@@ -3993,65 +3993,67 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                 calltarget->_myCallSite->_callNode);
             size = 10;
         } else {
-            // Check early if this is a large compiled method to adjust the size threshold before expensive code size calculation
-            // This optimization moves the "is compiled" check earlier to save compilation time
-            // Use the binary size of the compiled body instead of initial bytecode size for a more accurate estimate
-            int32_t compiledBodySize = 0;
-            if (calltarget->_calleeMethod && !calltarget->_calleeMethod->isInterpreted()) {
-                TR_PersistentJittedBodyInfo *bodyInfo
-                    = ((TR_ResolvedJ9Method *)calltarget->_calleeMethod)->getExistingJittedBodyInfo();
-                if (bodyInfo) {
-                    // Get the binary size of the compiled method body
-                    void *startPC = calltarget->_calleeMethod->startAddressForJittedMethod();
-                    if (startPC) {
-                        // Use jitGetExceptionTableFromPC to get the metadata
-                        J9JITConfig *jitConfig = comp()->fej9()->getJ9JITConfig();
-                        J9VMThread *vmThread = comp()->fej9()->vmThread();
-                        J9JITExceptionTable *metaData = jitConfig->jitGetExceptionTableFromPC(vmThread, (UDATA)startPC);
-                        if (metaData) {
-                            // Calculate binary size from metadata
-                            compiledBodySize = (int32_t)((uintptr_t)metaData->endPC - (uintptr_t)metaData->startPC);
-                            heuristicTrace(tracer(),
-                                "Early check: Using compiled body binary size %d for method %s",
-                                compiledBodySize, tracer()->traceSignature(calltarget->_calleeSymbol));
+            {
+                // Check early if this is a large compiled method to adjust the size threshold before expensive code size calculation
+                // This optimization moves the "is compiled" check earlier to save compilation time
+                // Use the binary size of the compiled body instead of initial bytecode size for a more accurate estimate
+                int32_t compiledBodySize = 0;
+                if (calltarget->_calleeMethod && !calltarget->_calleeMethod->isInterpreted()) {
+                    TR_PersistentJittedBodyInfo *bodyInfo
+                        = ((TR_ResolvedJ9Method *)calltarget->_calleeMethod)->getExistingJittedBodyInfo();
+                    if (bodyInfo) {
+                        // Get the binary size of the compiled method body
+                        void *startPC = calltarget->_calleeMethod->startAddressForJittedMethod();
+                        if (startPC) {
+                            // Use jitGetExceptionTableFromPC to get the metadata
+                            J9JITConfig *jitConfig = comp()->fej9()->getJ9JITConfig();
+                            J9VMThread *vmThread = comp()->fej9()->vmThread();
+                            J9JITExceptionTable *metaData = jitConfig->jitGetExceptionTableFromPC(vmThread, (UDATA)startPC);
+                            if (metaData) {
+                                // Calculate binary size from metadata
+                                compiledBodySize = (int32_t)((uintptr_t)metaData->endPC - (uintptr_t)metaData->startPC);
+                                heuristicTrace(tracer(),
+                                    "Early check: Using compiled body binary size %d for method %s",
+                                    compiledBodySize, tracer()->traceSignature(calltarget->_calleeSymbol));
+                            }
                         }
                     }
                 }
-            }
-            
-            // Get block frequency for the check
-            int32_t frequency2 = 0;
-            TR::TreeTop *callNodeTreeTop = calltarget->_myCallSite->_callNodeTreeTop;
-            if (callNodeTreeTop) {
-                TR::Block *block = callNodeTreeTop->getEnclosingBlock();
-                frequency2 = comp()->convertNonDeterministicInput(block->getFrequency(),
-                    MAX_BLOCK_COUNT + MAX_COLD_BLOCK_COUNT, randomGenerator(), 0);
-            }
-            
-            // Perform early "is compiled" check and adjust threshold if needed
-            if (compiledBodySize > 0 && calltarget->_calleeMethod) {
-                int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
-                int32_t veryLargeCompiledMethodThreshold
-                    = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
-                int32_t veryLargeCompiledMethodFaninThreshold
-                    = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
-
-                static const char *cmt = feGetEnv("TR_CompiledMethodCallGraphThreshold");
-                if (cmt) {
-                    static const int32_t callGraphSizeBasedThreshold = atoi(cmt);
-                    veryLargeCompiledMethodThreshold = callGraphSizeBasedThreshold;
-                }
-
-                bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods)
-                    && isLargeCompiledMethod(calltarget->_calleeMethod, compiledBodySize, frequency2, exemptionFreqCutoff,
-                        veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
                 
-                if (largeCompiledCallee) {
-                    // Adjust the threshold before calculateCodeSize to save compilation time
-                    _maxRecursiveCallByteCodeSizeEstimate = (int32_t)(_maxRecursiveCallByteCodeSizeEstimate * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor);
-                    heuristicTrace(tracer(),
-                        "Early check: Adjusted _maxRecursiveCallByteCodeSizeEstimate to %d for large compiled method %s (binary size %d)",
-                        _maxRecursiveCallByteCodeSizeEstimate, tracer()->traceSignature(calltarget->_calleeSymbol), compiledBodySize);
+                // Get block frequency for the check
+                int32_t frequency2 = 0;
+                TR::TreeTop *callNodeTreeTop = calltarget->_myCallSite->_callNodeTreeTop;
+                if (callNodeTreeTop) {
+                    TR::Block *block = callNodeTreeTop->getEnclosingBlock();
+                    frequency2 = comp()->convertNonDeterministicInput(block->getFrequency(),
+                        MAX_BLOCK_COUNT + MAX_COLD_BLOCK_COUNT, randomGenerator(), 0);
+                }
+                
+                // Perform early "is compiled" check and adjust threshold if needed
+                if (compiledBodySize > 0 && calltarget->_calleeMethod) {
+                    int32_t exemptionFreqCutoff = comp()->getOptions()->getLargeCompiledMethodExemptionFreqCutoff();
+                    int32_t veryLargeCompiledMethodThreshold
+                        = comp()->getOptions()->getInlinerVeryLargeCompiledMethodThreshold();
+                    int32_t veryLargeCompiledMethodFaninThreshold
+                        = comp()->getOptions()->getInlinerVeryLargeCompiledMethodFaninThreshold();
+
+                    static const char *cmt = feGetEnv("TR_CompiledMethodCallGraphThreshold");
+                    if (cmt) {
+                        static const int32_t callGraphSizeBasedThreshold = atoi(cmt);
+                        veryLargeCompiledMethodThreshold = callGraphSizeBasedThreshold;
+                    }
+
+                    bool largeCompiledCallee = !comp()->getOption(TR_InlineVeryLargeCompiledMethods)
+                        && isLargeCompiledMethod(calltarget->_calleeMethod, compiledBodySize, frequency2, exemptionFreqCutoff,
+                            veryLargeCompiledMethodThreshold, veryLargeCompiledMethodFaninThreshold);
+                    
+                    if (largeCompiledCallee) {
+                        // Adjust the threshold before calculateCodeSize to save compilation time
+                        _maxRecursiveCallByteCodeSizeEstimate = (int32_t)(_maxRecursiveCallByteCodeSizeEstimate * TR::Options::_inlinerVeryLargeCompiledMethodAdjustFactor);
+                        heuristicTrace(tracer(),
+                            "Early check: Adjusted _maxRecursiveCallByteCodeSizeEstimate to %d for large compiled method %s (binary size %d)",
+                            _maxRecursiveCallByteCodeSizeEstimate, tracer()->traceSignature(calltarget->_calleeSymbol), compiledBodySize);
+                    }
                 }
             }
             
