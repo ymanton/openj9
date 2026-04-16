@@ -4011,10 +4011,22 @@ void TR_MultipleCallTargetInliner::weighCallSite(TR_CallStack *callStack, TR_Cal
                             J9JITExceptionTable *metaData = jitConfig->jitGetExceptionTableFromPC(vmThread, (UDATA)startPC);
                             if (metaData) {
                                 // Calculate binary size from metadata
-                                compiledBodySize = (int32_t)((uintptr_t)metaData->endPC - (uintptr_t)metaData->startPC);
+                                int32_t binarySize = (int32_t)((uintptr_t)metaData->endPC - (uintptr_t)metaData->startPC);
+                                
+                                // Convert binary size to approximate bytecode size for comparison with bytecode thresholds
+                                // Rough approximation: binary code is typically 4-8x larger than bytecode
+                                // Using a conservative factor of 5 as a middle ground across architectures:
+                                // - x86-64: typically 5-7 bytes per bytecode
+                                // - ppc64le: typically 4-6 bytes per bytecode (RISC, fixed 4-byte instructions)
+                                // - aarch64: typically 4-6 bytes per bytecode (RISC, fixed 4-byte instructions)
+                                // This factor can be tuned via command line options if needed
+                                static const char *binaryToBytecodeFactorEnv = feGetEnv("TR_BinaryToBytecodeScaleFactor");
+                                static const int32_t binaryToBytecodeScaleFactor = binaryToBytecodeFactorEnv ? atoi(binaryToBytecodeFactorEnv) : 5;
+                                
+                                compiledBodySize = binarySize / binaryToBytecodeScaleFactor;
                                 heuristicTrace(tracer(),
-                                    "Early check: Using compiled body binary size %d for method %s",
-                                    compiledBodySize, tracer()->traceSignature(calltarget->_calleeSymbol));
+                                    "Early check: Binary size %d, estimated bytecode size %d (scale factor %d) for method %s",
+                                    binarySize, compiledBodySize, binaryToBytecodeScaleFactor, tracer()->traceSignature(calltarget->_calleeSymbol));
                             }
                         }
                     }
