@@ -4021,6 +4021,7 @@ void TR_ResolvedJ9Method::construct()
         { "sun/nio/cs/ext/SBCS_Decoder", EncodeMethods },
         { "java/lang/invoke/FoldHandle", FoldHandleMethods },
         { "java/lang/ref/SoftReference", JavaLangRefSoftReferenceMethods },
+        { "java/math/MutableBigInteger", MutableBigIntegerMethods },
         { 0 }
     };
 
