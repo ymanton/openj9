@@ -565,7 +565,6 @@ static TR::RecognizedMethod canSkipZeroInitializationOnNewarrays[] = { TR::java_
     TR::java_lang_String_split_str_int, TR::java_math_BigDecimal_toString, TR::java_math_BigInteger_init_long,
 #ifdef OPENJ9_BUILD
     TR::java_math_BigInteger_toByteArray,
-    TR::java_math_MutableBigInteger_divideMagnitude,
     TR::java_math_MutableBigInteger_divideOneWord,
 #endif // OPENJ9_BUILD
     TR::java_math_BigInteger_stripLeadingZeroBytes1, TR::java_math_BigInteger_stripLeadingZeroBytes2,
