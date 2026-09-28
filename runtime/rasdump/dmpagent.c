@@ -43,6 +43,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif /*  defined(LINUX) || defined(OSX) */
+#if defined(LINUX)
+#include <sys/mman.h>
+#endif /* defined(LINUX) */
 
 #include "ut_j9dmp.h"
 
@@ -926,6 +929,43 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 	return OMR_ERROR_NONE;
 }
 
+#if defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES)
+/**
+ * If TR_WILLNEEDSCCMetadataOnJavacore is set, issue madvise(MADV_WILLNEED) on the
+ * SCC metadata sub-region (UPDATEPTR to CADEBUGSTART) for each cache layer. This
+ * asks the kernel to begin reading back pages that were previously disclaimed with
+ * MADV_PAGEOUT, overlapping the I/O with the earlier sections of javacore generation
+ * so that by the time writeSharedClassSection() runs the pages are already resident.
+ */
+static void
+prefetchSCCMetadataIfNeeded(J9JavaVM *vm)
+{
+	static int willneedMetadata = -1; /* -1 = not yet checked */
+	if (willneedMetadata < 0)
+		willneedMetadata = (NULL != getenv("TR_WILLNEEDSCCMetadataOnJavacore")) ? 1 : 0;
+	if (!willneedMetadata)
+		return;
+	if (NULL == vm->sharedClassConfig)
+		return;
+
+	J9SharedClassCacheDescriptor *scHead = vm->sharedClassConfig->cacheDescriptorList;
+	if (NULL == scHead)
+		return;
+
+	J9SharedClassCacheDescriptor *scCur = scHead;
+	do {
+		J9SharedCacheHeader *ca = scCur->cacheStartAddress;
+		/* UPDATEPTR: start of metadata entries */
+		uint8_t *metadataStart = ((uint8_t *)ca) + ca->updateSRP;
+		/* CADEBUGSTART: start of class debug area (line number tables etc.) */
+		uint8_t *debugStart    = ((uint8_t *)ca) + ca->totalBytes - ca->debugRegionSize;
+		if (metadataStart < debugStart)
+			madvise(metadataStart, (size_t)(debugStart - metadataStart), MADV_WILLNEED);
+		scCur = scCur->next;
+	} while (scCur != scHead);
+}
+#endif /* defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES) */
+
 static omr_error_t
 doJavaDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 {
@@ -941,6 +981,10 @@ doJavaDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 			return OMR_ERROR_INTERNAL;
 		}
 	}
+
+#if defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES)
+	prefetchSCCMetadataIfNeeded(vm);
+#endif /* defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES) */
 
 	runJavadump(label, context, agent);
 
