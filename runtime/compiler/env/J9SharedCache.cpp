@@ -70,6 +70,7 @@
 #define CAEND(ca) (((uint8_t *)(ca)) + (ca)->totalBytes)
 #define UPDATEPTR(ca) (((uint8_t *)(ca)) + (ca)->updateSRP)
 #define SEGUPDATEPTR(ca) (((uint8_t *)(ca)) + (ca)->segmentSRP)
+#define CADEBUGSTART(ca) (((uint8_t *)(ca)) + (ca)->totalBytes - (ca)->debugRegionSize)
 
 // Used by TR_J9SharedCache::rememberClass() to communicate that a class has not been recorded in the SCC but could have
 // been recorded.
@@ -149,6 +150,13 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
     PORT_ACCESS_FROM_JAVAVM(_javaVM); // for j9vmem_supported_page_sizes
     UDATA pageSize = j9vmem_supported_page_sizes()[0];
     bool trace = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerbosePerformance);
+    static bool noDisclaimMetadata = (feGetEnv("TR_NoDISCLAIMSCCMetadata") != NULL);
+    static bool noDisclaimMetadataLogged = false;
+    if (trace && noDisclaimMetadata && !noDisclaimMetadataLogged) {
+        noDisclaimMetadataLogged = true;
+        TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+            "SCC metadata region disclaim skipped (TR_NoDISCLAIMSCCMetadata)");
+    }
 
     do {
         uint8_t *rwStart = RWUPDATEPTR(scCur->cacheStartAddress);
@@ -161,9 +169,23 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
             break;
         }
         numDisclaimed++;
-        uint8_t *updateStart = UPDATEPTR(scCur->cacheStartAddress);
-        uint8_t *updateEnd = CAEND(scCur->cacheStartAddress);
-        if (!disclaim(updateStart, updateEnd, pageSize, trace)) {
+
+        uint8_t *metadataStart = UPDATEPTR(scCur->cacheStartAddress);
+        uint8_t *debugStart    = CADEBUGSTART(scCur->cacheStartAddress);
+        uint8_t *cacheEnd      = CAEND(scCur->cacheStartAddress);
+
+        if (!noDisclaimMetadata) {
+            if (!disclaim(metadataStart, debugStart, pageSize, trace)) {
+                if (trace)
+                    TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+                        "WARNING: Disabling shared class cache disclaiming from now on");
+                _disclaimEnabled = false;
+                break;
+            }
+            numDisclaimed++;
+        }
+
+        if (!disclaim(debugStart, cacheEnd, pageSize, trace)) {
             if (trace)
                 TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
                     "WARNING: Disabling shared class cache disclaiming from now on");
@@ -171,6 +193,7 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
             break;
         }
         numDisclaimed++;
+
         scCur = scCur->next;
     } while (scCur != scHead);
 
