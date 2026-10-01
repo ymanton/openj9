@@ -49,9 +49,11 @@
 #include "runtime/JITServerAOTDeserializer.hpp"
 #endif
 
-// for madvise
+// for madvise / posix_fadvise
 #ifdef LINUX
+#include <fcntl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #ifndef MADV_NOHUGEPAGE
 #define MADV_NOHUGEPAGE 15
 #endif // MADV_NOHUGEPAGE
@@ -138,6 +140,37 @@ bool TR_J9SharedCache::disclaim(const uint8_t *start, const uint8_t *end, UDATA 
     return false;
 }
 
+// Evict the given [start, end) range from the OS page cache using posix_fadvise(FADV_DONTNEED).
+// This is stronger than madvise(MADV_PAGEOUT): MADV_PAGEOUT only unmaps pages from the process's
+// RSS while leaving them in the page cache; FADV_DONTNEED actually discards the page cache entries,
+// so the next access requires real disk I/O.  Used to simulate memory-pressured environments where
+// the page cache would have been evicted between a disclaim and the next javacore.
+//
+// cacheStart is the base virtual address of the mmap'd cache region (== cacheStartAddress).
+// The SCC file is mapped from offset 0, so file_offset = vaddr - cacheStart.
+// fd must be a readable file descriptor for the SCC backing file; it is closed by the caller.
+static void
+disclaimFromPageCache(int fd, const uint8_t *cacheStart,
+                      const uint8_t *start, const uint8_t *end,
+                      UDATA pageSize, bool trace)
+{
+    if (fd < 0 || start >= end)
+        return;
+
+    // Round start up to the next page boundary (same alignment as madvise call above).
+    const uint8_t *alignedStart = (const uint8_t *)(((UDATA)start + (pageSize - 1)) & ~(pageSize - 1));
+    if (alignedStart >= end)
+        return;
+
+    off_t fileOffset = (off_t)(alignedStart - cacheStart);
+    off_t length     = (off_t)(end - alignedStart);
+
+    int ret = posix_fadvise(fd, fileOffset, length, POSIX_FADV_DONTNEED);
+    if (ret != 0 && trace)
+        TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+            "WARNING: posix_fadvise(FADV_DONTNEED) failed for SCC page cache eviction; errno: %d", errno);
+}
+
 int32_t TR_J9SharedCache::disclaimSharedCaches()
 {
     int32_t numDisclaimed = 0;
@@ -158,7 +191,32 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
             "SCC metadata region disclaim skipped (TR_NoDISCLAIMSCCMetadata)");
     }
 
+    // TR_SCCDisclaimFromPageCache: after each madvise(MADV_PAGEOUT) call, also evict the same
+    // pages from the OS page cache via posix_fadvise(FADV_DONTNEED).  This simulates environments
+    // where memory pressure would have caused the kernel to evict the page cache entries before
+    // the next access, turning what would otherwise be cheap minor faults into major faults.
+    static int disclaimFromPageCacheEnabled = -1; // -1 = not yet checked
+    if (disclaimFromPageCacheEnabled < 0)
+        disclaimFromPageCacheEnabled = (feGetEnv("TR_SCCDisclaimFromPageCache") != NULL) ? 1 : 0;
+
     do {
+        // Open the cache backing file for posix_fadvise if needed.  cacheDir in javacoreData
+        // contains the full file path of the base-layer SCC file.
+        int cacheFd = -1;
+        if (disclaimFromPageCacheEnabled) {
+            if (_javaVM->sharedClassConfig && _javaVM->sharedClassConfig->getJavacoreData) {
+                J9SharedClassJavacoreDataDescriptor javacoreData;
+                memset(&javacoreData, 0, sizeof(javacoreData));
+                if (_javaVM->sharedClassConfig->getJavacoreData(_javaVM, &javacoreData) && javacoreData.cacheDir)
+                    cacheFd = open(javacoreData.cacheDir, O_RDONLY);
+            }
+            if (cacheFd < 0 && trace)
+                TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+                    "WARNING: TR_SCCDisclaimFromPageCache: could not open SCC file (errno: %d)", errno);
+        }
+
+        const uint8_t *cacheBase = (const uint8_t *)scCur->cacheStartAddress;
+
         uint8_t *rwStart = RWUPDATEPTR(scCur->cacheStartAddress);
         uint8_t *rwEnd = SEGUPDATEPTR(scCur->cacheStartAddress);
         if (!disclaim(rwStart, rwEnd, pageSize, trace)) {
@@ -166,8 +224,10 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
                 TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
                     "WARNING: Disabling shared class cache disclaiming from now on");
             _disclaimEnabled = false;
+            if (cacheFd >= 0) close(cacheFd);
             break;
         }
+        disclaimFromPageCache(cacheFd, cacheBase, rwStart, rwEnd, pageSize, trace);
         numDisclaimed++;
 
         uint8_t *metadataStart = UPDATEPTR(scCur->cacheStartAddress);
@@ -180,8 +240,10 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
                     TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
                         "WARNING: Disabling shared class cache disclaiming from now on");
                 _disclaimEnabled = false;
+                if (cacheFd >= 0) close(cacheFd);
                 break;
             }
+            disclaimFromPageCache(cacheFd, cacheBase, metadataStart, debugStart, pageSize, trace);
             numDisclaimed++;
         }
 
@@ -190,9 +252,14 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
                 TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
                     "WARNING: Disabling shared class cache disclaiming from now on");
             _disclaimEnabled = false;
+            if (cacheFd >= 0) close(cacheFd);
             break;
         }
+        disclaimFromPageCache(cacheFd, cacheBase, debugStart, cacheEnd, pageSize, trace);
         numDisclaimed++;
+
+        if (cacheFd >= 0)
+            close(cacheFd);
 
         scCur = scCur->next;
     } while (scCur != scHead);
