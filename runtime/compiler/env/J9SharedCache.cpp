@@ -183,12 +183,19 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
     PORT_ACCESS_FROM_JAVAVM(_javaVM); // for j9vmem_supported_page_sizes
     UDATA pageSize = j9vmem_supported_page_sizes()[0];
     bool trace = TR::Options::getCmdLineOptions()->getVerboseOption(TR_VerbosePerformance);
-    static bool noDisclaimMetadata = (feGetEnv("TR_NoDISCLAIMSCCMetadata") != NULL);
-    static bool noDisclaimMetadataLogged = false;
+    static bool noDisclaimMetadata  = (feGetEnv("TR_NoDISCLAIMSCCMetadata")    != NULL);
+    static bool noDisclaimROMClasses = (feGetEnv("TR_NoDISCLAIMSCCROMClasses") != NULL);
+    static bool noDisclaimMetadataLogged  = false;
+    static bool noDisclaimROMClassesLogged = false;
     if (trace && noDisclaimMetadata && !noDisclaimMetadataLogged) {
         noDisclaimMetadataLogged = true;
         TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
             "SCC metadata region disclaim skipped (TR_NoDISCLAIMSCCMetadata)");
+    }
+    if (trace && noDisclaimROMClasses && !noDisclaimROMClassesLogged) {
+        noDisclaimROMClassesLogged = true;
+        TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+            "SCC ROMClass/AOT region disclaim skipped (TR_NoDISCLAIMSCCROMClasses)");
     }
 
     // TR_SCCDisclaimFromPageCache: after each madvise(MADV_PAGEOUT) call, also evict the same
@@ -219,16 +226,18 @@ int32_t TR_J9SharedCache::disclaimSharedCaches()
 
         uint8_t *rwStart = RWUPDATEPTR(scCur->cacheStartAddress);
         uint8_t *rwEnd = SEGUPDATEPTR(scCur->cacheStartAddress);
-        if (!disclaim(rwStart, rwEnd, pageSize, trace)) {
-            if (trace)
-                TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
-                    "WARNING: Disabling shared class cache disclaiming from now on");
-            _disclaimEnabled = false;
-            if (cacheFd >= 0) close(cacheFd);
-            break;
+        if (!noDisclaimROMClasses) {
+            if (!disclaim(rwStart, rwEnd, pageSize, trace)) {
+                if (trace)
+                    TR_VerboseLog::writeLineLocked(TR_Vlog_PERF,
+                        "WARNING: Disabling shared class cache disclaiming from now on");
+                _disclaimEnabled = false;
+                if (cacheFd >= 0) close(cacheFd);
+                break;
+            }
+            disclaimFromPageCache(cacheFd, cacheBase, rwStart, rwEnd, pageSize, trace);
+            numDisclaimed++;
         }
-        disclaimFromPageCache(cacheFd, cacheBase, rwStart, rwEnd, pageSize, trace);
-        numDisclaimed++;
 
         uint8_t *metadataStart = UPDATEPTR(scCur->cacheStartAddress);
         uint8_t *debugStart    = CADEBUGSTART(scCur->cacheStartAddress);
