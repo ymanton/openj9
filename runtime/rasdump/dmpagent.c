@@ -931,19 +931,35 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 
 #if defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES)
 /**
- * If TR_WILLNEEDSCCMetadataOnJavacore is set, issue madvise(MADV_WILLNEED) on the
- * SCC metadata sub-region (UPDATEPTR to CADEBUGSTART) for each cache layer. This
- * asks the kernel to begin reading back pages that were previously disclaimed with
- * MADV_PAGEOUT, overlapping the I/O with the earlier sections of javacore generation
- * so that by the time writeSharedClassSection() runs the pages are already resident.
+ * If TR_WILLNEEDSCCMetadataOnJavacore or TR_WILLNEEDSCCROMClassesOnJavacore is set,
+ * issue madvise(MADV_WILLNEED) on the corresponding SCC sub-region(s) for each cache
+ * layer at the earliest point in javacore generation.  This asks the kernel to begin
+ * asynchronously reading back pages that were previously disclaimed with MADV_PAGEOUT,
+ * overlapping the I/O with the earlier javacore sections so the pages are resident
+ * by the time writeClasses() / writeSharedClassSection() need them.
+ *
+ * SCC layout per layer (addresses increase left to right):
+ *
+ *   RWUPDATEPTR --[ROMClass/AOT: Region 1]--> SEGUPDATEPTR
+ *                                              --[free space]-->
+ *                                                               UPDATEPTR --[metadata]--> CADEBUGSTART
+ *
+ * Region 1 and the metadata region are NOT necessarily adjacent (free space lies
+ * between SEGUPDATEPTR and UPDATEPTR).  When both env vars are set AND the two
+ * regions happen to be adjacent (SEGUPDATEPTR == UPDATEPTR, i.e. a full cache),
+ * a single madvise covers both; otherwise two separate calls are issued.
  */
 static void
-prefetchSCCMetadataIfNeeded(J9JavaVM *vm)
+prefetchSCCRegionsIfNeeded(J9JavaVM *vm)
 {
-	static int willneedMetadata = -1; /* -1 = not yet checked */
+	static int willneedMetadata  = -1; /* -1 = not yet checked */
+	static int willneedROMClasses = -1;
 	if (willneedMetadata < 0)
-		willneedMetadata = (NULL != getenv("TR_WILLNEEDSCCMetadataOnJavacore")) ? 1 : 0;
-	if (!willneedMetadata)
+		willneedMetadata  = (NULL != getenv("TR_WILLNEEDSCCMetadataOnJavacore"))   ? 1 : 0;
+	if (willneedROMClasses < 0)
+		willneedROMClasses = (NULL != getenv("TR_WILLNEEDSCCROMClassesOnJavacore")) ? 1 : 0;
+
+	if (!willneedMetadata && !willneedROMClasses)
 		return;
 	if (NULL == vm->sharedClassConfig)
 		return;
@@ -955,12 +971,38 @@ prefetchSCCMetadataIfNeeded(J9JavaVM *vm)
 	J9SharedClassCacheDescriptor *scCur = scHead;
 	do {
 		J9SharedCacheHeader *ca = scCur->cacheStartAddress;
-		/* UPDATEPTR: start of metadata entries */
-		uint8_t *metadataStart = ((uint8_t *)ca) + ca->updateSRP;
-		/* CADEBUGSTART: start of class debug area (line number tables etc.) */
-		uint8_t *debugStart    = ((uint8_t *)ca) + ca->totalBytes - ca->debugRegionSize;
-		if (metadataStart < debugStart)
-			madvise(metadataStart, (size_t)(debugStart - metadataStart), MADV_WILLNEED);
+
+		/* Region 1: RWUPDATEPTR -> SEGUPDATEPTR  (ROMClass + AOT code) */
+		uint8_t *rwStart   = ((uint8_t *)ca) + ca->readWriteSRP;
+		uint8_t *rwEnd     = ((uint8_t *)ca) + ca->segmentSRP;
+
+		/* Metadata region: UPDATEPTR -> CADEBUGSTART */
+		uint8_t *metaStart = ((uint8_t *)ca) + ca->updateSRP;
+		uint8_t *debugStart = ((uint8_t *)ca) + ca->totalBytes - ca->debugRegionSize;
+
+		if (willneedROMClasses && willneedMetadata) {
+			/* Both regions requested.  If they are adjacent (cache is full, no free
+			 * space gap between SEGUPDATEPTR and UPDATEPTR), issue a single madvise
+			 * covering both to avoid two syscalls.  Otherwise issue them separately
+			 * so we don't prefetch unrelated free-space pages in between. */
+			if (rwEnd == metaStart) {
+				/* Adjacent: one call from rwStart to debugStart */
+				if (rwStart < debugStart)
+					madvise(rwStart, (size_t)(debugStart - rwStart), MADV_WILLNEED);
+			} else {
+				if (rwStart < rwEnd)
+					madvise(rwStart, (size_t)(rwEnd - rwStart), MADV_WILLNEED);
+				if (metaStart < debugStart)
+					madvise(metaStart, (size_t)(debugStart - metaStart), MADV_WILLNEED);
+			}
+		} else if (willneedROMClasses) {
+			if (rwStart < rwEnd)
+				madvise(rwStart, (size_t)(rwEnd - rwStart), MADV_WILLNEED);
+		} else { /* willneedMetadata only */
+			if (metaStart < debugStart)
+				madvise(metaStart, (size_t)(debugStart - metaStart), MADV_WILLNEED);
+		}
+
 		scCur = scCur->next;
 	} while (scCur != scHead);
 }
@@ -983,7 +1025,7 @@ doJavaDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 	}
 
 #if defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES)
-	prefetchSCCMetadataIfNeeded(vm);
+	prefetchSCCRegionsIfNeeded(vm);
 #endif /* defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES) */
 
 	runJavadump(label, context, agent);
