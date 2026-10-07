@@ -45,6 +45,7 @@
 #endif /*  defined(LINUX) || defined(OSX) */
 #if defined(LINUX)
 #include <sys/mman.h>
+#include <unistd.h>
 #endif /* defined(LINUX) */
 
 #include "ut_j9dmp.h"
@@ -952,10 +953,10 @@ doToolDump(J9RASdumpAgent *agent, char *label, J9RASdumpContext *context)
 static void
 prefetchSCCRegionsIfNeeded(J9JavaVM *vm)
 {
-	static int willneedMetadata  = -1; /* -1 = not yet checked */
+	static int willneedMetadata   = -1; /* -1 = not yet checked */
 	static int willneedROMClasses = -1;
 	if (willneedMetadata < 0)
-		willneedMetadata  = (NULL != getenv("TR_WILLNEEDSCCMetadataOnJavacore"))   ? 1 : 0;
+		willneedMetadata   = (NULL != getenv("TR_WILLNEEDSCCMetadataOnJavacore"))   ? 1 : 0;
 	if (willneedROMClasses < 0)
 		willneedROMClasses = (NULL != getenv("TR_WILLNEEDSCCROMClassesOnJavacore")) ? 1 : 0;
 
@@ -968,24 +969,36 @@ prefetchSCCRegionsIfNeeded(J9JavaVM *vm)
 	if (NULL == scHead)
 		return;
 
+	/* madvise requires page-aligned address and length.  Round start down and end up
+	 * so we cover at least the same pages that madvise(MADV_PAGEOUT) disclaimed. */
+	size_t pageSize = (size_t)sysconf(_SC_PAGESIZE);
+	if (pageSize == 0)
+		pageSize = 4096; /* safe fallback */
+#define PAGE_ALIGN_DOWN(p) ((uint8_t *)(((uintptr_t)(p))  & ~(pageSize - 1)))
+#define PAGE_ALIGN_UP(p)   ((uint8_t *)((((uintptr_t)(p)) + (pageSize - 1)) & ~(pageSize - 1)))
+
 	J9SharedClassCacheDescriptor *scCur = scHead;
 	do {
 		J9SharedCacheHeader *ca = scCur->cacheStartAddress;
 
 		/* Region 1: RWUPDATEPTR -> SEGUPDATEPTR  (ROMClass + AOT code) */
-		uint8_t *rwStart   = ((uint8_t *)ca) + ca->readWriteSRP;
-		uint8_t *rwEnd     = ((uint8_t *)ca) + ca->segmentSRP;
+		uint8_t *rwStart    = PAGE_ALIGN_DOWN(((uint8_t *)ca) + ca->readWriteSRP);
+		uint8_t *rwEnd      = PAGE_ALIGN_UP  (((uint8_t *)ca) + ca->segmentSRP);
 
 		/* Metadata region: UPDATEPTR -> CADEBUGSTART */
-		uint8_t *metaStart = ((uint8_t *)ca) + ca->updateSRP;
-		uint8_t *debugStart = ((uint8_t *)ca) + ca->totalBytes - ca->debugRegionSize;
+		uint8_t *metaStart  = PAGE_ALIGN_DOWN(((uint8_t *)ca) + ca->updateSRP);
+		uint8_t *debugStart = PAGE_ALIGN_UP  (((uint8_t *)ca) + ca->totalBytes - ca->debugRegionSize);
 
 		if (willneedROMClasses && willneedMetadata) {
 			/* Both regions requested.  If they are adjacent (cache is full, no free
 			 * space gap between SEGUPDATEPTR and UPDATEPTR), issue a single madvise
 			 * covering both to avoid two syscalls.  Otherwise issue them separately
-			 * so we don't prefetch unrelated free-space pages in between. */
-			if (rwEnd == metaStart) {
+			 * so we don't prefetch unrelated free-space pages in between.
+			 * Note: compare the unaligned pointers (segmentSRP vs updateSRP) so that
+			 * alignment rounding doesn't create a spurious apparent adjacency. */
+			uint8_t *rwEndUnaligned   = ((uint8_t *)ca) + ca->segmentSRP;
+			uint8_t *metaStartUnaligned = ((uint8_t *)ca) + ca->updateSRP;
+			if (rwEndUnaligned == metaStartUnaligned) {
 				/* Adjacent: one call from rwStart to debugStart */
 				if (rwStart < debugStart)
 					madvise(rwStart, (size_t)(debugStart - rwStart), MADV_WILLNEED);
@@ -1005,6 +1018,9 @@ prefetchSCCRegionsIfNeeded(J9JavaVM *vm)
 
 		scCur = scCur->next;
 	} while (scCur != scHead);
+
+#undef PAGE_ALIGN_DOWN
+#undef PAGE_ALIGN_UP
 }
 #endif /* defined(LINUX) && defined(J9VM_OPT_SHARED_CLASSES) */
 
